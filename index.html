@@ -658,15 +658,15 @@
 
   <div class="nav-tabs">
     <div class="tab-buttons">
-      <button class="tab-btn active" id="tabBtnRolling" data-mode="rolling">📊 Rolling Raffle Candlesticks (2022–2026)</button>
-      <button class="tab-btn" id="tabBtnLatest" data-mode="latest">🚨 Latest Stream Quick Audit</button>
-      <button class="tab-btn" id="tabBtnGamble" data-mode="gamble">🎰 !gamble Cadence &amp; Bot Detector</button>
+      <button class="tab-btn active" id="tabBtnRaffles" data-mode="raffles">🎟️ Raffle Participation &amp; Timer Audit</button>
+      <button class="tab-btn" id="tabBtnGamble" data-mode="gamble">🎰 !gamble Cooldown &amp; Script Audit</button>
     </div>
     <div style="font-size:11px; color:var(--muted);">
       Click any user row to open their full 2022–2026 Historical Timeline Inspector
     </div>
   </div>
 
+  <!-- RAFFLE CONTROLS BOX (Only shown in Raffle Audit view) -->
   <div class="scroller-box" id="scrollerBox">
     <div class="timeline-canvas-wrap" title="Click or drag to jump to any stream in history">
       <canvas id="timelineCanvas"></canvas>
@@ -686,7 +686,11 @@
       </div>
     </div>
     <div class="scroller-info">
-      <div class="date-badge" id="windowBadge">Window: ...</div>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <div class="date-badge" id="windowBadge">Window: ...</div>
+        <button id="btnPresetLatest" title="Inspect only the most recent stream (1 Stream lookback, min 4 raffles)" style="font-size:11px; padding:4px 9px; border-color:rgba(248,81,73,0.5); color:#ff7b72;">⚡ Latest Stream Preset</button>
+        <button id="btnPreset90d" title="Reset to standard 90-day rolling lookback" style="font-size:11px; padding:4px 9px;">📅 90-Day Default</button>
+      </div>
       <div class="controls-grid" id="raffleControlsGrid">
         <div class="control-item">
           <label for="windowSelect">Rolling Lookback:</label>
@@ -713,7 +717,7 @@
         </div>
 
         <div class="control-item">
-          <label for="watchlistFilterSelect">Watchlist Filter:</label>
+          <label for="watchlistFilterSelect">User Filter:</label>
           <select id="watchlistFilterSelect">
             <option value="all" selected>All Users</option>
             <option value="monitored_all">👁 All Flagged / Monitored / Watchlist</option>
@@ -761,6 +765,45 @@
       <span style="color:var(--muted); font-size:11px;">Twitch Monitored &amp; Admin Watchlist:</span>
     </div>
   </div>
+
+  <!-- GAMBLE CONTROLS BOX (Only shown in !gamble Audit view) -->
+  <div class="scroller-box" id="gambleControlsBox" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <div class="date-badge">🎰 All-Time !gamble Cooldown &amp; Script Analysis (2022–2026)</div>
+      <div class="controls-grid">
+        <div class="control-item">
+          <label for="gambleFilterSelect">Suspect Filter:</label>
+          <select id="gambleFilterSelect">
+            <option value="all" selected>All !gamble Users</option>
+            <option value="script_suspects">🚨 Script Suspects Only (IQR &le; 7.5m or &ge;50% !points Check)</option>
+            <option value="unflagged_suspects">⚠️ Unflagged Script Suspects Only</option>
+            <option value="monitored_all">👁 All Flagged / Monitored / Watchlist</option>
+            <option value="ghost_only">👻 Silent Cmd-Only Users (&ge;90% Cmds)</option>
+          </select>
+        </div>
+
+        <div class="control-item">
+          <label for="gambleMinInput">Min !gambles:</label>
+          <input type="number" id="gambleMinInput" value="15" min="5" max="1000" style="width:62px;">
+        </div>
+
+        <div class="control-item">
+          <label for="gambleSortSelect">Sort:</label>
+          <select id="gambleSortSelect">
+            <option value="gambles_desc" selected>Most !gambles Total (High → Low)</option>
+            <option value="iqr_asc">Tightest Cooldown Spread (IQR Low → High)</option>
+            <option value="autopts_desc">Highest !points → !gamble Auto-Check %</option>
+            <option value="cmd_pct_desc">Highest Cmd-Only % (Silent Bots)</option>
+            <option value="med_asc">Fastest Median Interval (Min)</option>
+          </select>
+        </div>
+
+        <div class="control-item">
+          <input type="text" id="gambleSearchInput" placeholder="Filter username..." style="width:145px;">
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="container">
@@ -787,6 +830,29 @@
     </div>
   </div>
 
+  <div id="gambleKpiRow" class="audit-cards" style="display:none;">
+    <div class="kpi-card">
+      <div class="kpi-label">Tracked !gamble Users</div>
+      <div class="kpi-val" id="kpiGambleTotalUsers">-</div>
+      <div class="kpi-sub">Users with &ge;15 recorded !gamble commands</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Tight Cooldown Script Suspects</div>
+      <div class="kpi-val" id="kpiGambleTightIqr" style="color:#ff7b72;">-</div>
+      <div class="kpi-sub">Inter-gamble IQR &le; 7.5m (&ge;10 intervals)</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">!points &rarr; !gamble Auto-Checkers</div>
+      <div class="kpi-val" id="kpiGambleAutoPts" style="color:#e3b341;">-</div>
+      <div class="kpi-sub">&ge;50% of !gambles preceded by !points within 12s</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Flagged / Monitored Gamblers</div>
+      <div class="kpi-val" id="kpiGambleMonitored" style="color:#f2cc60;">-</div>
+      <div class="kpi-sub">Watchlist / Twitch Monitored users in !gamble table</div>
+    </div>
+  </div>
+
   <div id="inspectorPanel">
     <div class="inspector-header">
       <div>
@@ -803,12 +869,18 @@
   </div>
 
   <div class="legend-bar">
-    <div class="legend-items" id="legendItems">
-      <span><strong>Candlestick Guide (0s – 90s Raffle Timer):</strong></span>
+    <div class="legend-items" id="raffleLegendItems">
+      <span><strong>Raffle Candlestick Guide (0s – 90s Raffle Timer):</strong></span>
       <span><span class="legend-swatch" style="background:rgba(248,81,73,0.75); border:1px solid #f85149;"></span>Tight Bot-like Box (Q3–Q1 &le; 11s &amp; p95 &le; 35s)</span>
       <span><span class="legend-swatch" style="background:rgba(210,153,34,0.75); border:1px solid #d29922;"></span>Narrow Box (Q3–Q1 &le; 16s)</span>
       <span><span class="legend-swatch" style="background:rgba(88,166,255,0.65); border:1px solid #58a6ff;"></span>Wide Human-like Spread (Q3–Q1 &gt; 16s)</span>
       <span><strong>|</strong> <span class="badge badge-monitoring">👁 MONITORING</span> = Twitch Suspicious User &bull; <span class="badge badge-ghost">👻 SILENT</span> = &ge;92% of messages are <code>!commands</code></span>
+    </div>
+    <div class="legend-items" id="gambleLegendItems" style="display:none;">
+      <span><strong>!gamble Candlestick Guide (0m – 45m Cooldown Window):</strong></span>
+      <span><span class="legend-swatch" style="background:rgba(248,81,73,0.75); border:1px solid #f85149;"></span>Script-like Cooldown (Q3–Q1 &le; 7.5m or &ge;60% <code>!points</code> Auto-Check)</span>
+      <span><span class="legend-swatch" style="background:rgba(210,153,34,0.75); border:1px solid #d29922;"></span>Narrow Spread (Q3–Q1 &le; 12.5m)</span>
+      <span><span class="legend-swatch" style="background:rgba(88,166,255,0.65); border:1px solid #58a6ff;"></span>Wide Human-like Spread (Q3–Q1 &gt; 12.5m)</span>
     </div>
     <div id="matchCountLabel" style="color:var(--accent); font-weight:600;"></div>
   </div>
@@ -848,6 +920,7 @@
           <th>Username &amp; Mod Status</th>
           <th>Total !gamble Count</th>
           <th>!points &rarr; !gamble Auto-Check</th>
+          <th>Chat Behavior (Cmd % vs Chat)</th>
           <th>Interval Between !gambles (Min)</th>
           <th>
             <div>Inter-Gamble Interval Candlestick (0m &rarr; 45m Cooldown Window)</div>
@@ -879,9 +952,11 @@ let userMeta = {};
 let gambleUsers = [];
 let watchlist = {};
 let numSessions = 0;
-let currentTabMode = 'rolling';
+let currentTabMode = 'raffles';
 
 // UI Elements
+const scrollerBox = document.getElementById('scrollerBox');
+const gambleControlsBox = document.getElementById('gambleControlsBox');
 const timeSlider = document.getElementById('timeSlider');
 const windowSelect = document.getElementById('windowSelect');
 const metricSelect = document.getElementById('metricSelect');
@@ -890,6 +965,12 @@ const pctMinSelect = document.getElementById('pctMinSelect');
 const minEntriesInput = document.getElementById('minEntriesInput');
 const sortSelect = document.getElementById('sortSelect');
 const searchInput = document.getElementById('searchInput');
+
+const gambleFilterSelect = document.getElementById('gambleFilterSelect');
+const gambleMinInput = document.getElementById('gambleMinInput');
+const gambleSortSelect = document.getElementById('gambleSortSelect');
+const gambleSearchInput = document.getElementById('gambleSearchInput');
+
 const windowBadge = document.getElementById('windowBadge');
 const summarySubtitle = document.getElementById('summarySubtitle');
 const lastUpdatedLabel = document.getElementById('lastUpdatedLabel');
@@ -900,6 +981,8 @@ const tableBody = document.getElementById('tableBody');
 const gambleTableBody = document.getElementById('gambleTableBody');
 const raffleTableWrap = document.getElementById('raffleTableWrap');
 const gambleTableWrap = document.getElementById('gambleTableWrap');
+const raffleLegendItems = document.getElementById('raffleLegendItems');
+const gambleLegendItems = document.getElementById('gambleLegendItems');
 const timelineCanvas = document.getElementById('timelineCanvas');
 const inspectorPanel = document.getElementById('inspectorPanel');
 const inspectorTitle = document.getElementById('inspectorTitle');
@@ -907,6 +990,7 @@ const inspectorWatchlistMeta = document.getElementById('inspectorWatchlistMeta')
 const userHistoryCanvas = document.getElementById('userHistoryCanvas');
 const watchlistPillsRow = document.getElementById('watchlistPillsRow');
 const auditKpiRow = document.getElementById('auditKpiRow');
+const gambleKpiRow = document.getElementById('gambleKpiRow');
 
 let selectedUserIdx = null;
 let playInterval = null;
@@ -1350,25 +1434,69 @@ function updateAuditKpis(endIdx) {
   document.getElementById('kpiUnflaggedSuspects').textContent = unflaggedSuspects;
 }
 
-function renderGambleTable(searchVal, wlFilter) {
+function updateGambleKpis() {
+  let tightCount = 0;
+  let autoPtsCount = 0;
+  let monitoredCount = 0;
+  for (const g of gambleUsers) {
+    if (g.st.iqr <= 7.5 && g.intervalsCount >= 10) tightCount++;
+    if (g.autoPtsPct >= 50) autoPtsCount++;
+    const wl = watchlist[g.uname];
+    if (wl && wl.status !== 'CLEARED') monitoredCount++;
+  }
+  document.getElementById('kpiGambleTotalUsers').textContent = gambleUsers.length.toLocaleString();
+  document.getElementById('kpiGambleTightIqr').textContent = tightCount;
+  document.getElementById('kpiGambleAutoPts').textContent = autoPtsCount;
+  document.getElementById('kpiGambleMonitored').textContent = monitoredCount;
+}
+
+function renderGambleTable() {
+  const gFilter = gambleFilterSelect.value;
+  const minGambles = parseInt(gambleMinInput.value, 10) || 15;
+  const gSort = gambleSortSelect.value;
+  const searchVal = gambleSearchInput.value.trim().toLowerCase();
+
   const filtered = gambleUsers.filter(g => {
+    if (g.totalGambles < minGambles) return false;
     if (searchVal && !g.uname.includes(searchVal)) return false;
     const wl = watchlist[g.uname];
+    const meta = userMeta[g.uname] || { totalMsgs: 0, cmdMsgs: 0 };
+    const cmdPct = meta.totalMsgs > 0 ? (meta.cmdMsgs / meta.totalMsgs) * 100 : 0;
     const isFlagged = Boolean(wl && wl.status !== 'CLEARED');
-    const isTwitchMonitored = Boolean(wl && (wl.status === 'MONITORING' || wl.status === 'ACTIVE_MONITORING' || wl.status === 'RESTRICTED'));
-    if (wlFilter === 'monitored_all' && !isFlagged) return false;
-    if (wlFilter === 'twitch_monitoring' && !isTwitchMonitored) return false;
-    if (wlFilter === 'unflagged_suspects' && (isFlagged || !(g.st.iqr <= 8.0 || g.autoPtsPct >= 50))) return false;
+    const isScriptSuspect = (g.st.iqr <= 7.5 && g.intervalsCount >= 10) || g.autoPtsPct >= 50;
+
+    if (gFilter === 'script_suspects' && !isScriptSuspect) return false;
+    if (gFilter === 'unflagged_suspects' && (isFlagged || !isScriptSuspect)) return false;
+    if (gFilter === 'monitored_all' && !isFlagged) return false;
+    if (gFilter === 'ghost_only' && !(cmdPct >= 90.0)) return false;
     return true;
   });
 
-  matchCountLabel.textContent = `Showing ${filtered.length} !gamble user${filtered.length === 1 ? '' : 's'} (min 15 !gambles)`;
+  filtered.sort((a, b) => {
+    if (gSort === 'iqr_asc') return a.st.iqr - b.st.iqr || b.totalGambles - a.totalGambles;
+    if (gSort === 'autopts_desc') return b.autoPtsPct - a.autoPtsPct || b.totalGambles - a.totalGambles;
+    if (gSort === 'med_asc') return a.st.med - b.st.med || b.totalGambles - a.totalGambles;
+    if (gSort === 'cmd_pct_desc') {
+      const mA = userMeta[a.uname] || { totalMsgs: 0, cmdMsgs: 0 };
+      const mB = userMeta[b.uname] || { totalMsgs: 0, cmdMsgs: 0 };
+      const cA = mA.totalMsgs > 0 ? (mA.cmdMsgs / mA.totalMsgs) : 0;
+      const cB = mB.totalMsgs > 0 ? (mB.cmdMsgs / mB.totalMsgs) : 0;
+      return cB - cA || b.totalGambles - a.totalGambles;
+    }
+    return b.totalGambles - a.totalGambles;
+  });
+
+  matchCountLabel.textContent = `Showing ${filtered.length} !gamble user${filtered.length === 1 ? '' : 's'} (min ${minGambles} !gambles)`;
 
   const maxMin = 45;
   const toPct = (m) => Math.min(100, Math.max(0, (m / maxMin) * 100)).toFixed(2);
 
   const htmlRows = filtered.map((g, idx) => {
     const st = g.st;
+    const meta = userMeta[g.uname] || { totalMsgs: 0, cmdMsgs: 0, wins: 0, ptsWon: 0 };
+    const cmdPct = meta.totalMsgs > 0 ? (meta.cmdMsgs / meta.totalMsgs) * 100 : 0;
+    const humanMsgs = Math.max(0, meta.totalMsgs - meta.cmdMsgs);
+    const isGhost = cmdPct >= 92.0 && meta.totalMsgs >= 30;
     const isScriptLike = (st.iqr <= 7.5 && g.intervalsCount >= 10) || g.autoPtsPct >= 60;
     const isNarrow = !isScriptLike && st.iqr <= 12.5 && g.intervalsCount >= 10;
 
@@ -1379,6 +1507,9 @@ function renderGambleTable(searchVal, wlFilter) {
 
     const botBadge = isScriptLike
       ? `<span class="badge badge-bot" title="Tight interval IQR (${st.iqr.toFixed(1)}m) or high !points->!gamble script rate">GAMBLE BOT?</span>`
+      : '';
+    const ghostBadge = isGhost
+      ? `<span class="badge badge-ghost" title="${cmdPct.toFixed(1)}% of all messages are !commands (${humanMsgs} human messages total)">👻 SILENT</span>`
       : '';
     const modBadge = getWatchlistBadgeHtml(g.uname);
 
@@ -1392,11 +1523,13 @@ function renderGambleTable(searchVal, wlFilter) {
     const meanLeft = toPct(st.mean);
 
     const autoColor = g.autoPtsPct >= 50 ? '#f85149' : (g.autoPtsPct >= 20 ? '#e3b341' : '#8b949e');
+    const cmdColor = cmdPct >= 92 ? '#ff7b72' : (cmdPct >= 80 ? '#e3b341' : '#8b949e');
     const uid = users.indexOf(g.uname);
+    const selectedClass = uid === selectedUserIdx ? 'selected' : '';
 
-    return `<tr class="user-row" data-uid="${uid}">
+    return `<tr class="user-row ${selectedClass}" data-uid="${uid}">
       <td class="rank-cell">${idx + 1}</td>
-      <td class="user-cell">${g.uname}${modBadge}${botBadge}</td>
+      <td class="user-cell">${g.uname}${modBadge}${botBadge}${ghostBadge}</td>
       <td class="pct-cell">
         <strong>${g.totalGambles.toLocaleString()} !gambles</strong>
         <div class="pct-sub">${g.intervalsCount} same-stream intervals</div>
@@ -1404,6 +1537,10 @@ function renderGambleTable(searchVal, wlFilter) {
       <td class="activity-cell">
         <strong style="color:${autoColor}">${g.autoPtsPct.toFixed(1)}% preceded by !points</strong>
         <span class="stats-sub">${g.autoPtsCount} / ${g.totalGambles} within 12s of !points</span>
+      </td>
+      <td class="activity-cell">
+        <strong style="color:${cmdColor}">${cmdPct.toFixed(1)}% Cmds</strong> <span class="pct-sub">(${humanMsgs.toLocaleString()} chat)</span>
+        <span class="stats-sub">Total msgs: ${meta.totalMsgs.toLocaleString()}</span>
       </td>
       <td class="stats-cell">
         <strong>Med: ${st.med.toFixed(1)}m (IQR: ${st.iqr.toFixed(1)}m)</strong>
@@ -1433,6 +1570,31 @@ function renderGambleTable(searchVal, wlFilter) {
 function updateDashboard() {
   if (!DATA) return;
   const [startIdx, endIdx] = getWindowSessionRange();
+
+  drawUserHistory(selectedUserIdx, startIdx, endIdx);
+
+  if (currentTabMode === 'gamble') {
+    scrollerBox.style.display = 'none';
+    gambleControlsBox.style.display = 'block';
+    auditKpiRow.style.display = 'none';
+    gambleKpiRow.style.display = 'grid';
+    raffleLegendItems.style.display = 'none';
+    gambleLegendItems.style.display = 'flex';
+    raffleTableWrap.style.display = 'none';
+    gambleTableWrap.style.display = 'block';
+    updateGambleKpis();
+    renderGambleTable();
+    return;
+  }
+
+  scrollerBox.style.display = 'block';
+  gambleControlsBox.style.display = 'none';
+  gambleKpiRow.style.display = 'none';
+  raffleLegendItems.style.display = 'flex';
+  gambleLegendItems.style.display = 'none';
+  raffleTableWrap.style.display = 'block';
+  gambleTableWrap.style.display = 'none';
+
   const metric = metricSelect.value;
   const wlFilter = watchlistFilterSelect.value;
   const pctMin = parseFloat(pctMinSelect.value);
@@ -1440,19 +1602,15 @@ function updateDashboard() {
   const sortBy = sortSelect.value;
   const searchVal = searchInput.value.trim().toLowerCase();
 
-  updateAuditKpis(endIdx);
-  drawTimeline(startIdx, endIdx);
-  drawUserHistory(selectedUserIdx, startIdx, endIdx);
-
-  if (currentTabMode === 'gamble') {
-    raffleTableWrap.style.display = 'none';
-    gambleTableWrap.style.display = 'block';
-    renderGambleTable(searchVal, wlFilter);
-    return;
+  // Show the single-stream KPI audit cards whenever viewing a 1-stream lookback
+  if (parseInt(windowSelect.value, 10) === 1) {
+    auditKpiRow.style.display = 'grid';
+    updateAuditKpis(endIdx);
+  } else {
+    auditKpiRow.style.display = 'none';
   }
 
-  raffleTableWrap.style.display = 'block';
-  gambleTableWrap.style.display = 'none';
+  drawTimeline(startIdx, endIdx);
 
   let windowTotalRaffles = 0;
   const uEntered = new Map();
@@ -1638,26 +1796,8 @@ function updateDashboard() {
 
 function setTabMode(mode) {
   currentTabMode = mode;
-  document.getElementById('tabBtnRolling').classList.toggle('active', mode === 'rolling');
-  document.getElementById('tabBtnLatest').classList.toggle('active', mode === 'latest');
+  document.getElementById('tabBtnRaffles').classList.toggle('active', mode === 'raffles');
   document.getElementById('tabBtnGamble').classList.toggle('active', mode === 'gamble');
-
-  if (mode === 'latest') {
-    auditKpiRow.style.display = 'grid';
-    timeSlider.value = numSessions - 1;
-    windowSelect.value = '1';
-    minEntriesInput.value = '4';
-    pctMinSelect.value = '40';
-    sortSelect.value = 'iqr_asc';
-  } else if (mode === 'rolling') {
-    auditKpiRow.style.display = 'none';
-    windowSelect.value = '90';
-    minEntriesInput.value = '10';
-    pctMinSelect.value = '60';
-    sortSelect.value = 'pct_desc';
-  } else if (mode === 'gamble') {
-    auditKpiRow.style.display = 'none';
-  }
   updateDashboard();
 }
 
@@ -1712,7 +1852,7 @@ document.getElementById('btnLockPortal').addEventListener('click', () => {
   window.location.reload();
 });
 
-// Event Listeners
+// Event Listeners (Raffle Controls)
 timeSlider.addEventListener('input', updateDashboard);
 windowSelect.addEventListener('change', updateDashboard);
 metricSelect.addEventListener('change', updateDashboard);
@@ -1722,9 +1862,32 @@ minEntriesInput.addEventListener('input', updateDashboard);
 sortSelect.addEventListener('change', updateDashboard);
 searchInput.addEventListener('input', updateDashboard);
 
-document.getElementById('tabBtnRolling').addEventListener('click', () => setTabMode('rolling'));
-document.getElementById('tabBtnLatest').addEventListener('click', () => setTabMode('latest'));
+// Event Listeners (Gamble Controls)
+gambleFilterSelect.addEventListener('change', updateDashboard);
+gambleMinInput.addEventListener('input', updateDashboard);
+gambleSortSelect.addEventListener('change', updateDashboard);
+gambleSearchInput.addEventListener('input', updateDashboard);
+
+document.getElementById('tabBtnRaffles').addEventListener('click', () => setTabMode('raffles'));
 document.getElementById('tabBtnGamble').addEventListener('click', () => setTabMode('gamble'));
+
+document.getElementById('btnPresetLatest').addEventListener('click', () => {
+  timeSlider.value = numSessions - 1;
+  windowSelect.value = '1';
+  minEntriesInput.value = '4';
+  pctMinSelect.value = '40';
+  sortSelect.value = 'iqr_asc';
+  updateDashboard();
+});
+
+document.getElementById('btnPreset90d').addEventListener('click', () => {
+  timeSlider.value = numSessions - 1;
+  windowSelect.value = '90';
+  minEntriesInput.value = '10';
+  pctMinSelect.value = '60';
+  sortSelect.value = 'pct_desc';
+  updateDashboard();
+});
 
 document.getElementById('btnFirst').addEventListener('click', () => { timeSlider.value = 0; updateDashboard(); });
 document.getElementById('btnLast').addEventListener('click', () => { timeSlider.value = numSessions - 1; updateDashboard(); });
