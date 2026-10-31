@@ -644,6 +644,14 @@
     <div class="status-banner" id="statusBanner">
       <span><span class="status-dot"></span><strong id="lastUpdatedLabel">Updated: ...</strong></span>
       <span id="latestStreamSummaryLabel" style="color:var(--muted);">Latest Stream: ...</span>
+      <label for="tzSelect" style="color:var(--muted); font-size:11px; display:inline-flex; align-items:center; gap:4px;">
+        TZ:
+        <select id="tzSelect" title="Display timezone for stream dates and timestamps" style="padding:2px 6px; font-size:11px;">
+          <option value="America/New_York" selected>US Eastern (EST/EDT)</option>
+          <option value="UTC">UTC</option>
+          <option value="local">Browser Local</option>
+        </select>
+      </label>
       <button id="btnLockPortal" title="Clear saved decryption key and lock portal" style="padding:2px 8px; font-size:11px;">🔒 Lock</button>
     </div>
   </div>
@@ -886,6 +894,7 @@ const windowBadge = document.getElementById('windowBadge');
 const summarySubtitle = document.getElementById('summarySubtitle');
 const lastUpdatedLabel = document.getElementById('lastUpdatedLabel');
 const latestStreamSummaryLabel = document.getElementById('latestStreamSummaryLabel');
+const tzSelect = document.getElementById('tzSelect');
 const matchCountLabel = document.getElementById('matchCountLabel');
 const tableBody = document.getElementById('tableBody');
 const gambleTableBody = document.getElementById('gambleTableBody');
@@ -901,6 +910,101 @@ const auditKpiRow = document.getElementById('auditKpiRow');
 
 let selectedUserIdx = null;
 let playInterval = null;
+
+const savedTz = localStorage.getItem('hyndrosa_tz');
+if (savedTz && ['America/New_York', 'UTC', 'local'].includes(savedTz)) {
+  tzSelect.value = savedTz;
+}
+
+function getEffectiveTzOption() {
+  const val = tzSelect ? tzSelect.value : 'America/New_York';
+  return val === 'local' ? undefined : val;
+}
+
+function getTzAbbrev(dateObj = new Date()) {
+  const tz = getEffectiveTzOption();
+  if (tz === 'UTC') return 'UTC';
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'short',
+    }).formatToParts(dateObj);
+    const tzPart = parts.find(p => p.type === 'timeZoneName');
+    return tzPart ? tzPart.value : (tz || 'Local');
+  } catch {
+    return tz || 'Local';
+  }
+}
+
+function formatSessionDate(sess) {
+  if (!sess) return '-';
+  const tz = getEffectiveTzOption();
+  const d = new Date(sess.ts * 1000);
+  try {
+    return new Intl.DateTimeFormat('sv-SE', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  } catch {
+    return sess.date;
+  }
+}
+
+function formatSessionTimeRange(sess) {
+  if (!sess) return '';
+  const tz = getEffectiveTzOption();
+  const dStart = new Date(sess.ts * 1000);
+  const dEnd = new Date(sess.end_ts * 1000);
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: tz !== 'UTC',
+    });
+    const abbr = getTzAbbrev(dEnd);
+    return `${fmt.format(dStart)}–${fmt.format(dEnd)} ${abbr}`;
+  } catch {
+    return '';
+  }
+}
+
+function formatFullTimestamp(isoStr) {
+  const d = new Date(isoStr);
+  if (isNaN(d)) return isoStr;
+  const tz = getEffectiveTzOption();
+  try {
+    const datePart = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+    const timePart = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: tz !== 'UTC',
+    }).format(d);
+    return `${datePart} ${timePart} ${getTzAbbrev(d)}`;
+  } catch {
+    return d.toISOString();
+  }
+}
+
+function refreshHeaderLabels() {
+  if (!DATA || !sessions.length) return;
+  const latestSess = sessions[numSessions - 1];
+  const firstSess = sessions[0];
+  lastUpdatedLabel.textContent = `Last Updated: ${formatFullTimestamp(DATA.generated_at)}`;
+  latestStreamSummaryLabel.textContent = latestSess
+    ? `Latest Stream: ${formatSessionDate(latestSess)} (${formatSessionTimeRange(latestSess)} • ${latestSess.rc} raffles, ${latestSess.u.length} participants)`
+    : '';
+  summarySubtitle.textContent = `Dataset: ${DATA.total_raffles.toLocaleString()} valid raffles across ${numSessions} streams (${formatSessionDate(firstSess)} to ${formatSessionDate(latestSess)} ${getTzAbbrev(new Date(latestSess.ts * 1000))}) • ${users.length.toLocaleString()} tracked users`;
+}
 
 function b64ToBytes(b64) {
   const bin = atob(b64);
@@ -1220,8 +1324,8 @@ function drawUserHistory(uIdx, winStartIdx, winEndIdx) {
 function updateAuditKpis(endIdx) {
   const sess = sessions[endIdx];
   if (!sess) return;
-  document.getElementById('kpiStreamDate').textContent = sess.date;
-  document.getElementById('kpiStreamRaffles').textContent = `${sess.rc} valid multi-ticket raffles`;
+  document.getElementById('kpiStreamDate').textContent = formatSessionDate(sess);
+  document.getElementById('kpiStreamRaffles').textContent = `${formatSessionTimeRange(sess)} • ${sess.rc} valid raffles`;
   document.getElementById('kpiParticipants').textContent = sess.u.length.toLocaleString();
 
   let highRate = 0;
@@ -1377,7 +1481,14 @@ function updateDashboard() {
   }
 
   const numWinSessions = endIdx - startIdx + 1;
-  windowBadge.textContent = `${sessions[startIdx].date} → ${sessions[endIdx].date} (${numWinSessions} stream${numWinSessions>1?'s':''}, ${windowTotalRaffles.toLocaleString()} valid raffles)`;
+  const startDateStr = formatSessionDate(sessions[startIdx]);
+  const endDateStr = formatSessionDate(sessions[endIdx]);
+  const tzAbbr = getTzAbbrev(new Date(sessions[endIdx].ts * 1000));
+  if (numWinSessions === 1) {
+    windowBadge.textContent = `${endDateStr} (${formatSessionTimeRange(sessions[endIdx])} • 1 stream, ${windowTotalRaffles.toLocaleString()} valid raffles)`;
+  } else {
+    windowBadge.textContent = `${startDateStr} → ${endDateStr} ${tzAbbr} (${numWinSessions} streams, ${windowTotalRaffles.toLocaleString()} valid raffles)`;
+  }
 
   const rows = [];
   for (const [uid, entered] of uEntered.entries()) {
@@ -1583,18 +1694,16 @@ async function initApp() {
   timeSlider.max = numSessions - 1;
   timeSlider.value = numSessions - 1;
 
-  const genDate = new Date(DATA.generated_at);
-  const latestSess = sessions[numSessions - 1];
-  lastUpdatedLabel.textContent = `Last Updated: ${isNaN(genDate) ? DATA.generated_at : genDate.toLocaleString()}`;
-  latestStreamSummaryLabel.textContent = latestSess
-    ? `Latest Stream: ${latestSess.date} (${latestSess.rc} raffles, ${latestSess.u.length} participants)`
-    : '';
-
-  summarySubtitle.textContent = `Dataset: ${DATA.total_raffles.toLocaleString()} valid raffles across ${numSessions} streams (${sessions[0]?.date} to ${latestSess?.date}) • ${users.length.toLocaleString()} tracked users`;
-
+  refreshHeaderLabels();
   renderWatchlistPills();
   updateDashboard();
 }
+
+tzSelect.addEventListener('change', () => {
+  localStorage.setItem('hyndrosa_tz', tzSelect.value);
+  refreshHeaderLabels();
+  updateDashboard();
+});
 
 document.getElementById('btnLockPortal').addEventListener('click', () => {
   localStorage.removeItem('hyndrosa_aes_key');
