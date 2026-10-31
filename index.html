@@ -30,13 +30,16 @@
   }
   /* Passcode Gate Overlay */
   #authGate {
-    display: none;
+    display: flex;
     position: fixed;
     inset: 0;
-    background: rgba(13, 17, 23, 0.96);
+    background: #0d1117;
     z-index: 9999;
     align-items: center;
     justify-content: center;
+  }
+  #appRoot {
+    display: none;
   }
   .gate-card {
     background: var(--panel);
@@ -618,16 +621,17 @@
 
 <div id="authGate">
   <div class="gate-card">
-    <h2>🔒 #hyndrosa Admin Portal</h2>
-    <p>Enter the moderator team passcode to view raffle participation &amp; suspicious timer analytics.</p>
+    <h2>🔒 Protected Admin Portal</h2>
+    <p>This dataset is encrypted with AES-256-GCM (PBKDF2-SHA256). Enter the moderator decryption key to unlock.</p>
     <form id="gateForm" class="gate-input-row">
-      <input type="password" id="gateInput" placeholder="Admin passcode..." autocomplete="current-password">
-      <button type="submit">Unlock</button>
+      <input type="password" id="gateInput" placeholder="AES decryption key..." autocomplete="current-password">
+      <button type="submit">Decrypt</button>
     </form>
-    <div id="gateError" class="gate-error">Invalid passcode.</div>
+    <div id="gateError" class="gate-error">Decryption failed: Invalid key.</div>
   </div>
 </div>
 
+<div id="appRoot">
 <div class="header">
   <div class="title-row">
     <div>
@@ -640,6 +644,7 @@
     <div class="status-banner" id="statusBanner">
       <span><span class="status-dot"></span><strong id="lastUpdatedLabel">Updated: ...</strong></span>
       <span id="latestStreamSummaryLabel" style="color:var(--muted);">Latest Stream: ...</span>
+      <button id="btnLockPortal" title="Clear saved decryption key and lock portal" style="padding:2px 8px; font-size:11px;">🔒 Lock</button>
     </div>
   </div>
 
@@ -853,6 +858,7 @@
       <tbody id="gambleTableBody"></tbody>
     </table>
   </div>
+</div>
 </div>
 
 <script>
@@ -1545,15 +1551,26 @@ function setTabMode(mode) {
 }
 
 async function initApp() {
+  const gate = document.getElementById('authGate');
+  const appRoot = document.getElementById('appRoot');
+
   if (EMBEDDED_DATA) {
     DATA = EMBEDDED_DATA;
   } else {
     try {
       DATA = await loadAndDecryptData();
     } catch (err) {
-      summarySubtitle.textContent = 'Error loading encrypted dataset: ' + err.message;
+      const errEl = document.getElementById('gateError');
+      errEl.textContent = 'Error loading encrypted dataset: ' + err.message;
+      errEl.style.display = 'block';
       return;
     }
+  }
+
+  gate.style.display = 'none';
+  appRoot.style.display = 'block';
+  if (window.location.hash.includes('key=')) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
   }
 
   sessions = DATA.sessions || [];
@@ -1578,6 +1595,13 @@ async function initApp() {
   renderWatchlistPills();
   updateDashboard();
 }
+
+document.getElementById('btnLockPortal').addEventListener('click', () => {
+  localStorage.removeItem('hyndrosa_aes_key');
+  localStorage.removeItem('hyndrosa_admin_key');
+  history.replaceState(null, '', window.location.pathname);
+  window.location.reload();
+});
 
 // Event Listeners
 timeSlider.addEventListener('input', updateDashboard);
