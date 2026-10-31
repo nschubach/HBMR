@@ -378,9 +378,9 @@
   .inspector-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
     margin-bottom: 10px;
   }
   .inspector-header h2 {
@@ -388,13 +388,44 @@
     font-size: 15px;
     color: #fff;
   }
+  .inspector-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .inspector-toolbar button {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .inspector-canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 246px;
+  }
   canvas#userHistoryCanvas {
     width: 100%;
-    height: 210px;
+    height: 246px;
     display: block;
     background: #0d1117;
     border: 1px solid var(--border);
     border-radius: 6px;
+    cursor: crosshair;
+  }
+  #inspectorTooltip {
+    display: none;
+    position: absolute;
+    pointer-events: none;
+    background: rgba(13, 17, 23, 0.94);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 11px;
+    color: var(--text);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.65);
+    z-index: 20;
+    white-space: nowrap;
+    line-height: 1.45;
   }
   /* Table */
   .table-wrap {
@@ -859,12 +890,32 @@
         <h2 id="inspectorTitle">User Historical Timeline</h2>
         <div id="inspectorWatchlistMeta" style="font-size:12px; color:var(--muted); margin-top:3px;"></div>
       </div>
-      <button id="btnCloseInspector">✕ Close Inspector</button>
+      <div class="inspector-toolbar">
+        <div class="btn-group">
+          <button id="btnInspModeRaffle" class="active" title="Show per-stream Raffle participation &amp; 0-90s join-time candlesticks">🎟️ Raffle History</button>
+          <button id="btnInspModeGamble" title="Show per-stream !gamble counts &amp; 0-45m cooldown candlesticks">🎰 !gamble History</button>
+        </div>
+        <span style="color:var(--border);">|</span>
+        <span id="inspZoomBadge" style="font-size:11px; color:var(--accent); font-weight:600; padding:0 4px;">All Streams</span>
+        <div class="btn-group">
+          <button id="btnZoomPanLeft" title="Pan left">◀</button>
+          <button id="btnZoomIn" title="Zoom in (or scroll wheel / drag on chart)">➕ Zoom In</button>
+          <button id="btnZoomOut" title="Zoom out">➖ Zoom Out</button>
+          <button id="btnZoomPanRight" title="Pan right">▶</button>
+          <button id="btnZoomMatch" title="Zoom to match the Raffle Lookback Window">🔍 Match Window</button>
+          <button id="btnZoomLast60" title="Zoom to most recent 60 streams">Last 60</button>
+          <button id="btnZoomReset" title="Reset zoom to all streams (2022–2026)">↺ All</button>
+        </div>
+        <button id="btnCloseInspector">✕ Close</button>
+      </div>
     </div>
-    <canvas id="userHistoryCanvas"></canvas>
-    <div style="display:flex; justify-content:space-between; color:var(--muted); font-size:11px; margin-top:6px;">
-      <span>Top band: Per-stream participation % (0–100%) | Bottom band: Per-stream Join-Time Candlestick (Q1–Q3 box, p5–p95 whiskers, Median dot, 0–90s)</span>
-      <span>Vertical blue line = Current Time Scroller position</span>
+    <div class="inspector-canvas-wrap">
+      <canvas id="userHistoryCanvas"></canvas>
+      <div id="inspectorTooltip"></div>
+    </div>
+    <div style="display:flex; justify-content:space-between; color:var(--muted); font-size:11px; margin-top:6px; flex-wrap:wrap; gap:8px;">
+      <span id="inspectorFooterGuide">Top band: Per-stream participation % (0–100%) | Bottom band: Per-stream Join-Time Candlestick (0–90s)</span>
+      <span>💡 <strong>Tip:</strong> Drag across the chart or use mouse wheel to zoom into any date range • Hover any bar for exact stream date &amp; stats</span>
     </div>
   </div>
 
@@ -994,6 +1045,17 @@ const gambleKpiRow = document.getElementById('gambleKpiRow');
 
 let selectedUserIdx = null;
 let playInterval = null;
+let inspectorMode = 'raffle'; // 'raffle' | 'gamble'
+let inspZoomStart = 0;
+let inspZoomEnd = 0;
+let inspHoverIdx = null;
+let inspDragStartIdx = null;
+let inspDragCurrIdx = null;
+const inspectorTooltip = document.getElementById('inspectorTooltip');
+const inspZoomBadge = document.getElementById('inspZoomBadge');
+const inspectorFooterGuide = document.getElementById('inspectorFooterGuide');
+const btnInspModeRaffle = document.getElementById('btnInspModeRaffle');
+const btnInspModeGamble = document.getElementById('btnInspModeGamble');
 
 const savedTz = localStorage.getItem('hyndrosa_tz');
 if (savedTz && ['America/New_York', 'UTC', 'local'].includes(savedTz)) {
@@ -1275,6 +1337,7 @@ function drawTimeline(startIdx, endIdx) {
   const w = rect.width;
   const h = rect.height;
   ctx.clearRect(0, 0, w, h);
+  if (numSessions < 2) return;
 
   const xStart = (startIdx / (numSessions - 1)) * w;
   const xEnd = (endIdx / (numSessions - 1)) * w;
@@ -1289,10 +1352,31 @@ function drawTimeline(startIdx, endIdx) {
   const barW = Math.max(1.5, (w / numSessions) - 0.5);
   for (let i = 0; i < numSessions; i++) {
     const x = (i / (numSessions - 1)) * (w - barW);
-    const bh = (sessions[i].rc / maxRc) * (h - 8);
+    const bh = (sessions[i].rc / maxRc) * (h - 14);
     const inWin = i >= startIdx && i <= endIdx;
     ctx.fillStyle = inWin ? '#58a6ff' : '#30363d';
     ctx.fillRect(x, h - bh, barW, bh);
+  }
+
+  // Year/date ticks along top of timeline scroller
+  let lastYear = '';
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '10px sans-serif';
+  for (let i = 0; i < numSessions; i++) {
+    const yr = formatSessionDate(sessions[i]).slice(0, 4);
+    if (yr !== lastYear) {
+      lastYear = yr;
+      const x = (i / (numSessions - 1)) * w;
+      ctx.strokeStyle = 'rgba(139,148,158,0.28)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+      if (x + 28 < w) {
+        ctx.fillText(yr, x + 3, 10);
+      }
+    }
   }
 
   ctx.strokeStyle = '#ffffff';
@@ -1303,8 +1387,30 @@ function drawTimeline(startIdx, endIdx) {
   ctx.stroke();
 }
 
+function getInspZoomBounds() {
+  if (!numSessions) return [0, 0];
+  const zS = Math.max(0, Math.min(numSessions - 1, inspZoomStart));
+  const zE = Math.max(zS, Math.min(numSessions - 1, inspZoomEnd));
+  return [zS, zE];
+}
+
+function setInspZoom(startIdx, endIdx) {
+  if (!numSessions) return;
+  let s = Math.max(0, Math.min(numSessions - 1, Math.round(startIdx)));
+  let e = Math.max(0, Math.min(numSessions - 1, Math.round(endIdx)));
+  if (s > e) [s, e] = [e, s];
+  if (e - s < 4 && numSessions >= 5) {
+    s = Math.max(0, e - 4);
+    e = Math.min(numSessions - 1, s + 4);
+  }
+  inspZoomStart = s;
+  inspZoomEnd = e;
+  const [winS, winE] = getWindowSessionRange();
+  drawUserHistory(selectedUserIdx, winS, winE);
+}
+
 function drawUserHistory(uIdx, winStartIdx, winEndIdx) {
-  if (uIdx === null || uIdx === undefined) {
+  if (uIdx === null || uIdx === undefined || !sessions.length) {
     inspectorPanel.style.display = 'none';
     return;
   }
@@ -1315,11 +1421,26 @@ function drawUserHistory(uIdx, winStartIdx, winEndIdx) {
   const humanMsgs = Math.max(0, meta.totalMsgs - meta.cmdMsgs);
   const cmdPct = meta.totalMsgs > 0 ? ((meta.cmdMsgs / meta.totalMsgs) * 100).toFixed(1) : '0.0';
 
-  inspectorTitle.innerHTML = `Historical Rolling Profile: ${username} ${getWatchlistBadgeHtml(username)} (Across All ${numSessions} Streams, 2022–2026)`;
+  btnInspModeRaffle.classList.toggle('active', inspectorMode === 'raffle');
+  btnInspModeGamble.classList.toggle('active', inspectorMode === 'gamble');
+
+  const [zStart, zEnd] = getInspZoomBounds();
+  const zSpan = Math.max(1, zEnd - zStart);
+  const zCount = zEnd - zStart + 1;
+  inspZoomBadge.textContent = zCount === numSessions
+    ? `All ${numSessions} Streams (${formatSessionDate(sessions[0])} → ${formatSessionDate(sessions[numSessions - 1])})`
+    : `Zoom: ${formatSessionDate(sessions[zStart])} → ${formatSessionDate(sessions[zEnd])} (${zCount} of ${numSessions} streams)`;
+
+  const modeLabel = inspectorMode === 'gamble' ? '🎰 !gamble Cooldown History' : '🎟️ Raffle Join-Time History';
+  inspectorTitle.innerHTML = `${modeLabel}: ${username} ${getWatchlistBadgeHtml(username)}`;
   const wlStr = (wl && wl.status !== 'CLEARED')
     ? `Mod Status: ${wl.status} (${wl.reason || 'N/A'})`
     : 'Mod Status: Unflagged';
   inspectorWatchlistMeta.textContent = `${wlStr} • All-Time Chat: ${cmdPct}% commands (${meta.cmdMsgs.toLocaleString()} cmds vs ${humanMsgs.toLocaleString()} human msgs) • !gambles: ${meta.gambleMsgs.toLocaleString()} • Raffle Wins: ${meta.wins.toLocaleString()} (${meta.ptsWon.toLocaleString()} pts)`;
+
+  inspectorFooterGuide.textContent = inspectorMode === 'gamble'
+    ? 'Top band: !gambles per stream (Purple = normal, Red = ≥50% preceded by !points) | Bottom band: Inter-Gamble Interval Candlestick (0m–45m cooldown)'
+    : 'Top band: Per-stream raffle participation % (0–100%, purple dot = also gambled) | Bottom band: Join-Time Candlestick (0s–90s raffle window)';
 
   const dpr = window.devicePixelRatio || 1;
   const rect = userHistoryCanvas.getBoundingClientRect();
@@ -1332,77 +1453,204 @@ function drawUserHistory(uIdx, winStartIdx, winEndIdx) {
   const h = rect.height;
   ctx.clearRect(0, 0, w, h);
 
-  const topH = 65;
+  const padLeft = 48;
+  const padRight = 14;
+  const plotW = Math.max(10, w - padLeft - padRight);
+  const idxToX = (i) => padLeft + ((i - zStart) / zSpan) * plotW;
+
+  const topH = 66;
   const botTop = 80;
-  const botH = h - botTop - 18;
+  const axisTop = h - 22;
+  const botH = axisTop - botTop - 4;
 
-  const xWinStart = (winStartIdx / (numSessions - 1)) * w;
-  const xWinEnd = (winEndIdx / (numSessions - 1)) * w;
-  ctx.fillStyle = 'rgba(88, 166, 255, 0.10)';
-  ctx.fillRect(xWinStart, 0, Math.max(2, xWinEnd - xWinStart), h);
-
-  ctx.strokeStyle = '#30363d';
-  ctx.beginPath();
-  ctx.moveTo(0, 72);
-  ctx.lineTo(w, 72);
-  ctx.stroke();
-
-  const y9s = botTop + (9.0 / 90.0) * botH;
-  const y31s = botTop + (31.5 / 90.0) * botH;
-  ctx.fillStyle = 'rgba(248, 81, 73, 0.09)';
-  ctx.fillRect(0, y9s, w, y31s - y9s);
-
-  ctx.fillStyle = '#8b949e';
-  ctx.font = '10px sans-serif';
-  ctx.fillText('100% Entry', 6, 12);
-  ctx.fillText('0%', 6, topH);
-  ctx.fillText('0s (Start)', 6, botTop + 10);
-  ctx.fillText('30s', 6, botTop + (30/90)*botH);
-  ctx.fillText('60s', 6, botTop + (60/90)*botH);
-  ctx.fillText('90s (End)', 6, botTop + botH - 2);
-
-  for (let i = 0; i < numSessions; i++) {
-    const sess = sessions[i];
-    const uRec = sess.u.find(item => item[0] === uIdx);
-    if (!uRec) continue;
-
-    const x = (i / (numSessions - 1)) * w;
-    const entered = uRec[1];
-    const pct = Math.min(1, entered / sess.rc);
-    const barH = pct * (topH - 6);
-
-    ctx.fillStyle = (i >= winStartIdx && i <= winEndIdx) ? '#3fb950' : 'rgba(63, 185, 80, 0.45)';
-    ctx.fillRect(x - 1.5, topH - barH, 3, barH);
-
-    const st = computeStats(uRec[3]);
-    if (!st) continue;
-    const yP5 = botTop + Math.min(1, st.p5 / 90) * botH;
-    const yP95 = botTop + Math.min(1, st.p95 / 90) * botH;
-    const yQ1 = botTop + Math.min(1, st.q1 / 90) * botH;
-    const yQ3 = botTop + Math.min(1, st.q3 / 90) * botH;
-    const yMed = botTop + Math.min(1, st.med / 90) * botH;
-
-    ctx.strokeStyle = 'rgba(201, 209, 217, 0.55)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, yP5);
-    ctx.lineTo(x, yP95);
-    ctx.stroke();
-
-    const isTight = st.iqr <= 11 && st.p95 <= 35;
-    ctx.fillStyle = isTight ? '#f85149' : (st.iqr <= 16 ? '#d29922' : '#58a6ff');
-    ctx.fillRect(x - 2, yQ1, 4, Math.max(2, yQ3 - yQ1));
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x - 2, yMed - 1, 4, 2);
+  // Highlight active Raffle Scroller window if in Raffle tab
+  if (currentTabMode === 'raffles' && winEndIdx >= zStart && winStartIdx <= zEnd) {
+    const xWinStart = idxToX(Math.max(zStart, winStartIdx));
+    const xWinEnd = idxToX(Math.min(zEnd, winEndIdx));
+    ctx.fillStyle = 'rgba(88, 166, 255, 0.08)';
+    ctx.fillRect(xWinStart, 0, Math.max(2, xWinEnd - xWinStart), axisTop);
   }
 
-  ctx.strokeStyle = '#58a6ff';
-  ctx.lineWidth = 2;
+  // Horizontal divider lines
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(xWinEnd, 0);
-  ctx.lineTo(xWinEnd, h);
+  ctx.moveTo(padLeft, 72);
+  ctx.lineTo(w - padRight, 72);
+  ctx.moveTo(padLeft, axisTop);
+  ctx.lineTo(w - padRight, axisTop);
   ctx.stroke();
+
+  // Draw X-Axis Date Ruler & Vertical Gridlines
+  const numTicks = Math.min(zCount, Math.max(4, Math.floor(plotW / 125)));
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  for (let t = 0; t < numTicks; t++) {
+    const idx = Math.round(zStart + (t / Math.max(1, numTicks - 1)) * zSpan);
+    const x = idxToX(idx);
+    ctx.strokeStyle = 'rgba(48, 54, 61, 0.65)';
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, axisTop + 4);
+    ctx.stroke();
+
+    const dLabel = formatSessionDate(sessions[idx]);
+    const clampedX = Math.max(padLeft + 28, Math.min(w - padRight - 28, x));
+    ctx.fillText(dLabel, clampedX, h - 6);
+  }
+  ctx.textAlign = 'left';
+
+  const barStep = plotW / Math.max(1, zSpan + 1);
+  const barW = Math.max(2.5, Math.min(14, barStep * 0.72));
+  const boxW = Math.max(3, Math.min(16, barStep * 0.76));
+
+  if (inspectorMode === 'gamble') {
+    // Shaded 15m-30m typical script cooldown zone
+    const y15m = botTop + (15.0 / 45.0) * botH;
+    const y30m = botTop + (30.0 / 45.0) * botH;
+    ctx.fillStyle = 'rgba(248, 81, 73, 0.08)';
+    ctx.fillRect(padLeft, y15m, plotW, y30m - y15m);
+
+    let maxG = 5;
+    for (let i = zStart; i <= zEnd; i++) {
+      const gRec = sessions[i].g?.find(item => item[0] === uIdx);
+      if (gRec && gRec[1] > maxG) maxG = gRec[1];
+    }
+
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(`${maxG}x`, 4, 12);
+    ctx.fillText('0', 4, topH);
+    ctx.fillText('0m', 4, botTop + 10);
+    ctx.fillText('15m', 4, botTop + (15/45)*botH);
+    ctx.fillText('30m', 4, botTop + (30/45)*botH);
+    ctx.fillText('45m', 4, botTop + botH - 2);
+
+    for (let i = zStart; i <= zEnd; i++) {
+      const sess = sessions[i];
+      const gRec = sess.g?.find(item => item[0] === uIdx);
+      if (!gRec) continue;
+
+      const [, gCount, autoCount, gDeltas] = gRec;
+      const x = idxToX(i);
+      const ratio = Math.min(1, gCount / maxG);
+      const barH = Math.max(3, ratio * (topH - 8));
+      const isAutoHeavy = gCount > 0 && (autoCount / gCount) >= 0.5;
+
+      ctx.fillStyle = isAutoHeavy ? '#f85149' : '#a371f7';
+      ctx.fillRect(x - barW / 2, topH - barH, barW, barH);
+
+      const st = computeStats(gDeltas || []);
+      if (!st) continue;
+      const yP5 = botTop + Math.min(1, st.p5 / 45) * botH;
+      const yP95 = botTop + Math.min(1, st.p95 / 45) * botH;
+      const yQ1 = botTop + Math.min(1, st.q1 / 45) * botH;
+      const yQ3 = botTop + Math.min(1, st.q3 / 45) * botH;
+      const yMed = botTop + Math.min(1, st.med / 45) * botH;
+
+      ctx.strokeStyle = 'rgba(201, 209, 217, 0.65)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, yP5);
+      ctx.lineTo(x, yP95);
+      ctx.stroke();
+
+      const isTight = (st.iqr <= 7.5 && st.n >= 2) || isAutoHeavy;
+      ctx.fillStyle = isTight ? '#f85149' : (st.iqr <= 12.5 ? '#d29922' : '#58a6ff');
+      ctx.fillRect(x - boxW / 2, yQ1, boxW, Math.max(2.5, yQ3 - yQ1));
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x - boxW / 2, yMed - 1, boxW, 2);
+    }
+  } else {
+    // Raffle mode
+    const y9s = botTop + (9.0 / 90.0) * botH;
+    const y31s = botTop + (31.5 / 90.0) * botH;
+    ctx.fillStyle = 'rgba(248, 81, 73, 0.08)';
+    ctx.fillRect(padLeft, y9s, plotW, y31s - y9s);
+
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '10px sans-serif';
+    ctx.fillText('100%', 4, 12);
+    ctx.fillText('0%', 4, topH);
+    ctx.fillText('0s', 4, botTop + 10);
+    ctx.fillText('30s', 4, botTop + (30/90)*botH);
+    ctx.fillText('60s', 4, botTop + (60/90)*botH);
+    ctx.fillText('90s', 4, botTop + botH - 2);
+
+    for (let i = zStart; i <= zEnd; i++) {
+      const sess = sessions[i];
+      const x = idxToX(i);
+
+      // Mark if user also gambled in this stream
+      const gRec = sess.g?.find(item => item[0] === uIdx);
+      if (gRec) {
+        ctx.fillStyle = '#a371f7';
+        ctx.beginPath();
+        ctx.arc(x, 5, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const uRec = sess.u.find(item => item[0] === uIdx);
+      if (!uRec) continue;
+
+      const entered = uRec[1];
+      const pct = Math.min(1, entered / sess.rc);
+      const barH = Math.max(2, pct * (topH - 10));
+
+      ctx.fillStyle = (i >= winStartIdx && i <= winEndIdx) ? '#3fb950' : 'rgba(63, 185, 80, 0.50)';
+      ctx.fillRect(x - barW / 2, topH - barH, barW, barH);
+
+      const st = computeStats(uRec[3]);
+      if (!st) continue;
+      const yP5 = botTop + Math.min(1, st.p5 / 90) * botH;
+      const yP95 = botTop + Math.min(1, st.p95 / 90) * botH;
+      const yQ1 = botTop + Math.min(1, st.q1 / 90) * botH;
+      const yQ3 = botTop + Math.min(1, st.q3 / 90) * botH;
+      const yMed = botTop + Math.min(1, st.med / 90) * botH;
+
+      ctx.strokeStyle = 'rgba(201, 209, 217, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, yP5);
+      ctx.lineTo(x, yP95);
+      ctx.stroke();
+
+      const isTight = st.iqr <= 11 && st.p95 <= 35;
+      ctx.fillStyle = isTight ? '#f85149' : (st.iqr <= 16 ? '#d29922' : '#58a6ff');
+      ctx.fillRect(x - boxW / 2, yQ1, boxW, Math.max(2.5, yQ3 - yQ1));
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x - boxW / 2, yMed - 1, boxW, 2);
+    }
+  }
+
+  // Drag-to-zoom selection overlay
+  if (inspDragStartIdx !== null && inspDragCurrIdx !== null && inspDragStartIdx !== inspDragCurrIdx) {
+    const dS = Math.min(inspDragStartIdx, inspDragCurrIdx);
+    const dE = Math.max(inspDragStartIdx, inspDragCurrIdx);
+    const xS = idxToX(dS);
+    const xE = idxToX(dE);
+    ctx.fillStyle = 'rgba(88, 166, 255, 0.22)';
+    ctx.fillRect(xS, 0, Math.max(2, xE - xS), axisTop);
+    ctx.strokeStyle = '#58a6ff';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(xS, 0, Math.max(2, xE - xS), axisTop);
+  }
+
+  // Hover crosshair line
+  if (inspHoverIdx !== null && inspHoverIdx >= zStart && inspHoverIdx <= zEnd) {
+    const xH = idxToX(inspHoverIdx);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(xH, 0);
+    ctx.lineTo(xH, axisTop);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 }
 
 function updateAuditKpis(endIdx) {
@@ -1526,6 +1774,11 @@ function renderGambleTable() {
     const cmdColor = cmdPct >= 92 ? '#ff7b72' : (cmdPct >= 80 ? '#e3b341' : '#8b949e');
     const uid = users.indexOf(g.uname);
     const selectedClass = uid === selectedUserIdx ? 'selected' : '';
+    const firstDateStr = g.firstTs ? formatSessionDate({ ts: g.firstTs, date: '' }) : '';
+    const lastDateStr = g.lastTs ? formatSessionDate({ ts: g.lastTs, date: '' }) : '';
+    const activeDatesSub = (firstDateStr && lastDateStr)
+      ? `<div class="pct-sub" title="First and most recent !gamble dates">${firstDateStr} → ${lastDateStr}</div>`
+      : '';
 
     return `<tr class="user-row ${selectedClass}" data-uid="${uid}">
       <td class="rank-cell">${idx + 1}</td>
@@ -1533,6 +1786,7 @@ function renderGambleTable() {
       <td class="pct-cell">
         <strong>${g.totalGambles.toLocaleString()} !gambles</strong>
         <div class="pct-sub">${g.intervalsCount} same-stream intervals</div>
+        ${activeDatesSub}
       </td>
       <td class="activity-cell">
         <strong style="color:${autoColor}">${g.autoPtsPct.toFixed(1)}% preceded by !points</strong>
@@ -1833,6 +2087,8 @@ async function initApp() {
 
   timeSlider.max = numSessions - 1;
   timeSlider.value = numSessions - 1;
+  inspZoomStart = 0;
+  inspZoomEnd = Math.max(0, numSessions - 1);
 
   refreshHeaderLabels();
   renderWatchlistPills();
@@ -1941,18 +2197,192 @@ timelineCanvas.addEventListener('mousedown', (e) => {
   window.addEventListener('mouseup', onUp);
 });
 
-const onRowClick = (e) => {
+const openUserInspector = (uid, mode) => {
+  if (isNaN(uid) || uid < 0) return;
+  selectedUserIdx = uid;
+  inspectorMode = mode;
+  if (mode === 'gamble') {
+    let firstG = -1;
+    let lastG = -1;
+    for (let i = 0; i < numSessions; i++) {
+      if (sessions[i].g?.some(item => item[0] === uid)) {
+        if (firstG === -1) firstG = i;
+        lastG = i;
+      }
+    }
+    if (firstG !== -1) {
+      inspZoomStart = Math.max(0, firstG - 6);
+      inspZoomEnd = Math.min(numSessions - 1, Math.max(lastG + 4, inspZoomStart + 15));
+    } else {
+      inspZoomStart = 0;
+      inspZoomEnd = Math.max(0, numSessions - 1);
+    }
+  }
+  updateDashboard();
+  inspectorPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
+
+tableBody.addEventListener('click', (e) => {
   const tr = e.target.closest('tr.user-row');
   if (!tr) return;
-  const uid = parseInt(tr.dataset.uid, 10);
-  if (!isNaN(uid) && uid >= 0) {
-    selectedUserIdx = uid;
-    updateDashboard();
-    inspectorPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  openUserInspector(parseInt(tr.dataset.uid, 10), 'raffle');
+});
+
+gambleTableBody.addEventListener('click', (e) => {
+  const tr = e.target.closest('tr.user-row');
+  if (!tr) return;
+  openUserInspector(parseInt(tr.dataset.uid, 10), 'gamble');
+});
+
+btnInspModeRaffle.addEventListener('click', () => {
+  inspectorMode = 'raffle';
+  const [winS, winE] = getWindowSessionRange();
+  drawUserHistory(selectedUserIdx, winS, winE);
+});
+
+btnInspModeGamble.addEventListener('click', () => {
+  inspectorMode = 'gamble';
+  const [winS, winE] = getWindowSessionRange();
+  drawUserHistory(selectedUserIdx, winS, winE);
+});
+
+document.getElementById('btnZoomReset').addEventListener('click', () => {
+  setInspZoom(0, numSessions - 1);
+});
+
+document.getElementById('btnZoomLast60').addEventListener('click', () => {
+  setInspZoom(Math.max(0, numSessions - 60), numSessions - 1);
+});
+
+document.getElementById('btnZoomMatch').addEventListener('click', () => {
+  const [winS, winE] = getWindowSessionRange();
+  setInspZoom(Math.max(0, winS - 2), winE);
+});
+
+document.getElementById('btnZoomIn').addEventListener('click', () => {
+  const [zS, zE] = getInspZoomBounds();
+  const span = zE - zS;
+  if (span <= 8) return;
+  const shrink = Math.max(2, Math.round(span * 0.22));
+  setInspZoom(zS + shrink, zE - shrink);
+});
+
+document.getElementById('btnZoomOut').addEventListener('click', () => {
+  const [zS, zE] = getInspZoomBounds();
+  const span = zE - zS;
+  const grow = Math.max(4, Math.round(span * 0.35));
+  setInspZoom(zS - grow, zE + grow);
+});
+
+document.getElementById('btnZoomPanLeft').addEventListener('click', () => {
+  const [zS, zE] = getInspZoomBounds();
+  const span = zE - zS;
+  const step = Math.max(3, Math.round(span * 0.25));
+  const shift = Math.min(zS, step);
+  setInspZoom(zS - shift, zE - shift);
+});
+
+document.getElementById('btnZoomPanRight').addEventListener('click', () => {
+  const [zS, zE] = getInspZoomBounds();
+  const span = zE - zS;
+  const step = Math.max(3, Math.round(span * 0.25));
+  const shift = Math.min(numSessions - 1 - zE, step);
+  setInspZoom(zS + shift, zE + shift);
+});
+
+function canvasXToSessionIdx(clientX) {
+  const rect = userHistoryCanvas.getBoundingClientRect();
+  const padLeft = 48;
+  const padRight = 14;
+  const plotW = Math.max(10, rect.width - padLeft - padRight);
+  const ratio = Math.min(1, Math.max(0, (clientX - rect.left - padLeft) / plotW));
+  const [zS, zE] = getInspZoomBounds();
+  return Math.round(zS + ratio * (zE - zS));
+}
+
+userHistoryCanvas.addEventListener('mousemove', (ev) => {
+  if (selectedUserIdx === null || !sessions.length) return;
+  const idx = canvasXToSessionIdx(ev.clientX);
+  inspHoverIdx = idx;
+  if (inspDragStartIdx !== null) {
+    inspDragCurrIdx = idx;
   }
-};
-tableBody.addEventListener('click', onRowClick);
-gambleTableBody.addEventListener('click', onRowClick);
+  const [winS, winE] = getWindowSessionRange();
+  drawUserHistory(selectedUserIdx, winS, winE);
+
+  const sess = sessions[idx];
+  if (!sess) return;
+  const uRec = sess.u.find(item => item[0] === selectedUserIdx);
+  const gRec = sess.g?.find(item => item[0] === selectedUserIdx);
+
+  let raffleLine = '<span style="color:var(--muted);">Raffles: None entered</span>';
+  if (uRec) {
+    const [, entered, , deltas] = uRec;
+    const pct = ((entered / sess.rc) * 100).toFixed(1);
+    const st = computeStats(deltas);
+    raffleLine = `<span style="color:#3fb950;">🎟️ Raffles: <strong>${entered}/${sess.rc} (${pct}%)</strong></span>${st ? ` • Med: ${st.med.toFixed(1)}s, IQR: ${st.iqr.toFixed(1)}s` : ''}`;
+  }
+
+  let gambleLine = '<span style="color:var(--muted);">!gamble: None</span>';
+  if (gRec) {
+    const [, gCount, autoCount, gDeltas] = gRec;
+    const st = computeStats(gDeltas || []);
+    gambleLine = `<span style="color:#d2a8ff;">🎰 !gambles: <strong>${gCount}</strong> (${autoCount} auto-!points)</span>${st ? ` • Med: ${st.med.toFixed(1)}m, IQR: ${st.iqr.toFixed(1)}m` : ''}`;
+  }
+
+  inspectorTooltip.innerHTML = `
+    <div style="font-weight:700; color:#fff; margin-bottom:2px;">Stream #${idx + 1} • ${formatSessionDate(sess)} (${formatSessionTimeRange(sess)})</div>
+    <div>${raffleLine}</div>
+    <div>${gambleLine}</div>
+  `;
+  inspectorTooltip.style.display = 'block';
+  const wrapRect = userHistoryCanvas.parentElement.getBoundingClientRect();
+  const relX = ev.clientX - wrapRect.left;
+  const tipW = inspectorTooltip.offsetWidth || 260;
+  const leftPos = (relX + tipW + 20 > wrapRect.width) ? Math.max(8, relX - tipW - 12) : (relX + 14);
+  inspectorTooltip.style.left = `${leftPos}px`;
+  inspectorTooltip.style.top = '10px';
+});
+
+userHistoryCanvas.addEventListener('mouseleave', () => {
+  inspHoverIdx = null;
+  inspectorTooltip.style.display = 'none';
+  if (selectedUserIdx !== null) {
+    const [winS, winE] = getWindowSessionRange();
+    drawUserHistory(selectedUserIdx, winS, winE);
+  }
+});
+
+userHistoryCanvas.addEventListener('mousedown', (ev) => {
+  if (selectedUserIdx === null || !sessions.length) return;
+  inspDragStartIdx = canvasXToSessionIdx(ev.clientX);
+  inspDragCurrIdx = inspDragStartIdx;
+  const onUp = () => {
+    window.removeEventListener('mouseup', onUp);
+    if (inspDragStartIdx !== null && inspDragCurrIdx !== null && Math.abs(inspDragCurrIdx - inspDragStartIdx) >= 2) {
+      setInspZoom(inspDragStartIdx, inspDragCurrIdx);
+    }
+    inspDragStartIdx = null;
+    inspDragCurrIdx = null;
+    const [winS, winE] = getWindowSessionRange();
+    drawUserHistory(selectedUserIdx, winS, winE);
+  };
+  window.addEventListener('mouseup', onUp);
+});
+
+userHistoryCanvas.addEventListener('wheel', (ev) => {
+  if (selectedUserIdx === null || !sessions.length) return;
+  ev.preventDefault();
+  const centerIdx = canvasXToSessionIdx(ev.clientX);
+  const [zS, zE] = getInspZoomBounds();
+  const span = Math.max(4, zE - zS);
+  const factor = ev.deltaY < 0 ? 0.75 : 1.35;
+  const newSpan = Math.max(6, Math.min(numSessions - 1, Math.round(span * factor)));
+  const rel = (centerIdx - zS) / Math.max(1, span);
+  const nS = Math.round(centerIdx - rel * newSpan);
+  const nE = nS + newSpan;
+  setInspZoom(nS, nE);
+}, { passive: false });
 
 document.getElementById('btnCloseInspector').addEventListener('click', () => {
   selectedUserIdx = null;
