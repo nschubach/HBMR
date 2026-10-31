@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>#hyndrosa Official Raffle &amp; Gamble Bot Audit Portal</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-alt: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --bot-red: #f85149;
+    --bot-amber: #d29922;
+    --human-cyan: #3fb950;
+    --human-blue: #58a6ff;
+    --purple: #a371f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 13px;
+  }
+  /* Passcode Gate Overlay */
+  #authGate {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(13, 17, 23, 0.96);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+  }
+  .gate-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px 32px;
+    width: 380px;
+    max-width: 92vw;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+    text-align: center;
+  }
+  .gate-card h2 {
+    margin: 0 0 8px;
+    font-size: 18px;
+    color: #fff;
+  }
+  .gate-card p {
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .gate-input-row {
+    display: flex;
+    gap: 8px;
+  }
+  .gate-input-row input {
+    flex: 1;
+    padding: 8px 10px;
+    font-size: 13px;
+    background: #0d1117;
+    color: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .gate-input-row button {
+    padding: 8px 16px;
+    background: #238636;
+    border: 1px solid rgba(240,246,252,0.1);
+    color: #fff;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .gate-error {
+    color: var(--bot-red);
+    font-size: 12px;
+    margin-top: 10px;
+    display: none;
+  }
+  /* Header */
+  .header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+  }
+  .title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .title-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .title-row h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .official-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(163, 113, 247, 0.16);
+    border: 1px solid rgba(163, 113, 247, 0.45);
+    color: #d2a8ff;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .status-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 6px;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--human-cyan);
+    margin-right: 5px;
+  }
+  /* Navigation Tabs */
+  .nav-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .tab-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    background: #21262d;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .tab-btn.active {
+    background: rgba(88,166,255,0.18);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .scroller-box {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .timeline-canvas-wrap {
+    position: relative;
+    height: 46px;
+    width: 100%;
+    margin-bottom: 6px;
+    cursor: pointer;
+  }
+  canvas#timelineCanvas {
+    width: 100%;
+    height: 46px;
+    display: block;
+    border-radius: 4px;
+    background: #0d1117;
+  }
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  input[type="range"]#timeSlider {
+    flex: 1;
+    accent-color: var(--accent);
+    height: 6px;
+    cursor: pointer;
+  }
+  .scroller-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .date-badge {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(88,166,255,0.12);
+    border: 1px solid rgba(88,166,255,0.35);
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+  .btn-group {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  button, select, input[type="text"], input[type="number"] {
+    background: #21262d;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 4px 9px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  button:hover, select:hover {
+    border-color: #6e7681;
+    background: #292e36;
+  }
+  button.active {
+    background: rgba(88,166,255,0.2);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .controls-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .control-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .control-item label {
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .pills-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(48,54,61,0.6);
+  }
+  .pill {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: #21262d;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .pill:hover, .pill.active {
+    color: #fff;
+    border-color: var(--accent);
+    background: rgba(88,166,255,0.2);
+  }
+  .pill.pill-monitoring {
+    border-color: rgba(210,153,34,0.55);
+    color: #e3b341;
+  }
+  .pill.pill-banned {
+    border-color: rgba(248,81,73,0.55);
+    color: #ff7b72;
+  }
+  .container {
+    padding: 16px 20px 40px;
+    max-width: 1650px;
+    margin: 0 auto;
+  }
+  /* Latest Stream Audit KPI Cards */
+  .audit-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .kpi-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .kpi-label {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .kpi-val {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    margin-top: 4px;
+  }
+  .kpi-sub {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 3px;
+  }
+  .legend-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+  }
+  .legend-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .legend-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 5px;
+  }
+  /* User Inspector Panel */
+  #inspectorPanel {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+  .inspector-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .inspector-header h2 {
+    margin: 0;
+    font-size: 15px;
+    color: #fff;
+  }
+  canvas#userHistoryCanvas {
+    width: 100%;
+    height: 210px;
+    display: block;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  /* Table */
+  .table-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    background: var(--panel-alt);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(48,54,61,0.5);
+    vertical-align: middle;
+  }
+  tr.user-row {
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  tr.user-row:hover {
+    background: rgba(88,166,255,0.07);
+  }
+  tr.user-row.selected {
+    background: rgba(88,166,255,0.15);
+  }
+  .rank-cell {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    width: 38px;
+  }
+  .user-cell {
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    width: 230px;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 5px;
+    vertical-align: middle;
+  }
+  .badge-bot {
+    background: rgba(248,81,73,0.2);
+    color: #ff7b72;
+    border: 1px solid rgba(248,81,73,0.4);
+  }
+  .badge-tight {
+    background: rgba(210,153,34,0.2);
+    color: #e3b341;
+    border: 1px solid rgba(210,153,34,0.4);
+  }
+  .badge-ghost {
+    background: rgba(139,148,158,0.2);
+    color: #c9d1d9;
+    border: 1px solid rgba(139,148,158,0.45);
+  }
+  .badge-monitoring {
+    background: rgba(210,153,34,0.25);
+    color: #f2cc60;
+    border: 1px solid #d29922;
+  }
+  .badge-restricted {
+    background: rgba(248,81,73,0.28);
+    color: #ffa198;
+    border: 1px solid #f85149;
+  }
+  .badge-banned {
+    background: rgba(139,148,158,0.25);
+    color: #ff7b72;
+    border: 1px solid #f85149;
+    text-decoration: line-through;
+  }
+  .badge-watchlist {
+    background: rgba(163,113,247,0.22);
+    color: #d2a8ff;
+    border: 1px solid rgba(163,113,247,0.5);
+  }
+  .mod-note-sub {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .pct-cell {
+    width: 170px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pct-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pct-val {
+    font-weight: 700;
+    width: 48px;
+    text-align: right;
+  }
+  .pct-sub {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .activity-cell {
+    width: 165px;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .stats-cell {
+    width: 185px;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .stats-sub {
+    color: var(--muted);
+    font-size: 11px;
+    display: block;
+  }
+  .candle-cell {
+    min-width: 390px;
+    position: relative;
+  }
+  .candle-track {
+    position: relative;
+    height: 26px;
+    background: #0d1117;
+    border: 1px solid #262c36;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .candle-grid-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(139,148,158,0.14);
+    pointer-events: none;
+  }
+  .bot-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(248,81,73,0.09);
+    border-left: 1px dashed rgba(248,81,73,0.35);
+    border-right: 1px dashed rgba(248,81,73,0.35);
+    pointer-events: none;
+  }
+  .minmax-line {
+    position: absolute;
+    top: 12px;
+    height: 2px;
+    background: rgba(139,148,158,0.35);
+    pointer-events: none;
+  }
+  .whisker-line {
+    position: absolute;
+    top: 12px;
+    height: 2px;
+    background: #c9d1d9;
+    pointer-events: none;
+  }
+  .whisker-cap {
+    position: absolute;
+    top: 7px;
+    width: 2px;
+    height: 12px;
+    background: #c9d1d9;
+    pointer-events: none;
+  }
+  .candle-box {
+    position: absolute;
+    top: 4px;
+    height: 18px;
+    border-radius: 3px;
+    pointer-events: none;
+  }
+  .median-line {
+    position: absolute;
+    top: 2px;
+    width: 2px;
+    height: 22px;
+    background: #ffffff;
+    box-shadow: 0 0 3px #000;
+    pointer-events: none;
+  }
+  .mean-dot {
+    position: absolute;
+    top: 9px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #0d1117;
+    border: 2px solid #fff;
+    transform: translateX(-4px);
+    pointer-events: none;
+  }
+  .axis-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted);
+    padding: 2px 2px 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="authGate">
+  <div class="gate-card">
+    <h2>🔒 #hyndrosa Admin Portal</h2>
+    <p>Enter the moderator team passcode to view raffle participation &amp; suspicious timer analytics.</p>
+    <form id="gateForm" class="gate-input-row">
+      <input type="password" id="gateInput" placeholder="Admin passcode..." autocomplete="current-password">
+      <button type="submit">Unlock</button>
+    </form>
+    <div id="gateError" class="gate-error">Invalid passcode.</div>
+  </div>
+</div>
+
+<div class="header">
+  <div class="title-row">
+    <div>
+      <div class="title-left">
+        <h1>#hyndrosa Raffle &amp; Gamble Bot Audit Portal</h1>
+        <span class="official-pill">Automated Post-Stream Build</span>
+      </div>
+      <div class="subtitle" id="summarySubtitle">Loading dataset...</div>
+    </div>
+    <div class="status-banner" id="statusBanner">
+      <span><span class="status-dot"></span><strong id="lastUpdatedLabel">Updated: ...</strong></span>
+      <span id="latestStreamSummaryLabel" style="color:var(--muted);">Latest Stream: ...</span>
+    </div>
+  </div>
+
+  <div class="nav-tabs">
+    <div class="tab-buttons">
+      <button class="tab-btn active" id="tabBtnRolling" data-mode="rolling">📊 Rolling Raffle Candlesticks (2022–2026)</button>
+      <button class="tab-btn" id="tabBtnLatest" data-mode="latest">🚨 Latest Stream Quick Audit</button>
+      <button class="tab-btn" id="tabBtnGamble" data-mode="gamble">🎰 !gamble Cadence &amp; Bot Detector</button>
+    </div>
+    <div style="font-size:11px; color:var(--muted);">
+      Click any user row to open their full 2022–2026 Historical Timeline Inspector
+    </div>
+  </div>
+
+  <div class="scroller-box" id="scrollerBox">
+    <div class="timeline-canvas-wrap" title="Click or drag to jump to any stream in history">
+      <canvas id="timelineCanvas"></canvas>
+    </div>
+    <div class="slider-row">
+      <div class="btn-group">
+        <button id="btnFirst" title="Jump to earliest stream">⏮</button>
+        <button id="btnBack10" title="Back 10 streams">◀ -10</button>
+        <button id="btnBack1" title="Back 1 stream">◀ -1</button>
+      </div>
+      <input type="range" id="timeSlider" min="0" max="100" value="100">
+      <div class="btn-group">
+        <button id="btnFwd1" title="Forward 1 stream">+1 ▶</button>
+        <button id="btnFwd10" title="Forward 10 streams">+10 ▶</button>
+        <button id="btnLast" title="Jump to Now (latest stream)">Now ⏭</button>
+        <button id="btnPlay" title="Animate rolling window over time">▶ Play</button>
+      </div>
+    </div>
+    <div class="scroller-info">
+      <div class="date-badge" id="windowBadge">Window: ...</div>
+      <div class="controls-grid" id="raffleControlsGrid">
+        <div class="control-item">
+          <label for="windowSelect">Rolling Lookback:</label>
+          <select id="windowSelect">
+            <option value="1">1 Stream (Single Day)</option>
+            <option value="7">7 Days</option>
+            <option value="14">14 Days</option>
+            <option value="30">30 Days</option>
+            <option value="60">60 Days</option>
+            <option value="90" selected>90 Days</option>
+            <option value="180">180 Days</option>
+            <option value="365">1 Year (365d)</option>
+            <option value="99999">All Time (Up to Scroller)</option>
+          </select>
+        </div>
+
+        <div class="control-item">
+          <label for="metricSelect">Rate Metric:</label>
+          <select id="metricSelect">
+            <option value="stream" selected>Full-Stream % (Entered / All Raffles in Attended Streams)</option>
+            <option value="active">Active-Span % (Entered / Raffles While User Active in Stream)</option>
+            <option value="global">Global Window % (Entered / All Raffles in Date Window)</option>
+          </select>
+        </div>
+
+        <div class="control-item">
+          <label for="watchlistFilterSelect">Watchlist Filter:</label>
+          <select id="watchlistFilterSelect">
+            <option value="all" selected>All Users</option>
+            <option value="monitored_all">👁 All Flagged / Monitored / Watchlist</option>
+            <option value="twitch_monitoring">👁 Twitch "Suspicious: Monitoring" Only</option>
+            <option value="unflagged_suspects">⚠️ Unflagged Tight-Timer Suspects</option>
+            <option value="ghost_only">👻 Silent Cmd-Only Users (&ge;90% Cmds)</option>
+          </select>
+        </div>
+
+        <div class="control-item">
+          <label for="pctMinSelect">% Filter:</label>
+          <select id="pctMinSelect">
+            <option value="80">80% – 100%</option>
+            <option value="60" selected>60% – 100% (Default)</option>
+            <option value="40">40% – 100%</option>
+            <option value="20">20% – 100%</option>
+            <option value="0">All Users (0% – 100%)</option>
+          </select>
+        </div>
+
+        <div class="control-item">
+          <label for="minEntriesInput">Min Raffles:</label>
+          <input type="number" id="minEntriesInput" value="10" min="1" max="500" style="width:58px;">
+        </div>
+
+        <div class="control-item">
+          <label for="sortSelect">Sort:</label>
+          <select id="sortSelect">
+            <option value="pct_desc" selected>Participation % (High → Low)</option>
+            <option value="iqr_asc">Tightest Candlestick (Q3-Q1 Low → High)</option>
+            <option value="med_asc">Fastest Median Join (Low → High)</option>
+            <option value="cmd_pct_desc">Highest Cmd-Only % (Silent Bots)</option>
+            <option value="pts_won_desc">Most Raffle Points Won</option>
+            <option value="entries_desc">Most Raffles Entered</option>
+          </select>
+        </div>
+
+        <div class="control-item">
+          <input type="text" id="searchInput" placeholder="Filter username..." style="width:135px;">
+        </div>
+      </div>
+    </div>
+
+    <div class="pills-row" id="watchlistPillsRow">
+      <span style="color:var(--muted); font-size:11px;">Twitch Monitored &amp; Admin Watchlist:</span>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div id="auditKpiRow" class="audit-cards" style="display:none;">
+    <div class="kpi-card">
+      <div class="kpi-label">Selected Stream Date</div>
+      <div class="kpi-val" id="kpiStreamDate">-</div>
+      <div class="kpi-sub" id="kpiStreamRaffles">-</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Unique Raffle Participants</div>
+      <div class="kpi-val" id="kpiParticipants">-</div>
+      <div class="kpi-sub" id="kpiHighRateCount">-</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Active Monitored / Watchlist Users</div>
+      <div class="kpi-val" id="kpiMonitoredActive" style="color:#f2cc60;">-</div>
+      <div class="kpi-sub">Flagged users who entered raffles this stream</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Unflagged Tight-Timer Suspects</div>
+      <div class="kpi-val" id="kpiUnflaggedSuspects" style="color:#ff7b72;">-</div>
+      <div class="kpi-sub">IQR &le; 12s &amp; &ge;50% entry rate (not yet flagged)</div>
+    </div>
+  </div>
+
+  <div id="inspectorPanel">
+    <div class="inspector-header">
+      <div>
+        <h2 id="inspectorTitle">User Historical Timeline</h2>
+        <div id="inspectorWatchlistMeta" style="font-size:12px; color:var(--muted); margin-top:3px;"></div>
+      </div>
+      <button id="btnCloseInspector">✕ Close Inspector</button>
+    </div>
+    <canvas id="userHistoryCanvas"></canvas>
+    <div style="display:flex; justify-content:space-between; color:var(--muted); font-size:11px; margin-top:6px;">
+      <span>Top band: Per-stream participation % (0–100%) | Bottom band: Per-stream Join-Time Candlestick (Q1–Q3 box, p5–p95 whiskers, Median dot, 0–90s)</span>
+      <span>Vertical blue line = Current Time Scroller position</span>
+    </div>
+  </div>
+
+  <div class="legend-bar">
+    <div class="legend-items" id="legendItems">
+      <span><strong>Candlestick Guide (0s – 90s Raffle Timer):</strong></span>
+      <span><span class="legend-swatch" style="background:rgba(248,81,73,0.75); border:1px solid #f85149;"></span>Tight Bot-like Box (Q3–Q1 &le; 11s &amp; p95 &le; 35s)</span>
+      <span><span class="legend-swatch" style="background:rgba(210,153,34,0.75); border:1px solid #d29922;"></span>Narrow Box (Q3–Q1 &le; 16s)</span>
+      <span><span class="legend-swatch" style="background:rgba(88,166,255,0.65); border:1px solid #58a6ff;"></span>Wide Human-like Spread (Q3–Q1 &gt; 16s)</span>
+      <span><strong>|</strong> <span class="badge badge-monitoring">👁 MONITORING</span> = Twitch Suspicious User &bull; <span class="badge badge-ghost">👻 SILENT</span> = &ge;92% of messages are <code>!commands</code></span>
+    </div>
+    <div id="matchCountLabel" style="color:var(--accent); font-weight:600;"></div>
+  </div>
+
+  <div class="table-wrap" id="raffleTableWrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Username &amp; Mod Status</th>
+          <th>Raffles Entered (%)</th>
+          <th>Chat Behavior &amp; Raffle Wins</th>
+          <th>Join Time (Mean &plusmn; SD / Med)</th>
+          <th>
+            <div>Join-Time Candlestick Distribution (0s &rarr; 90s Raffle Window)</div>
+            <div class="axis-labels">
+              <span>0s (Start)</span>
+              <span>15s</span>
+              <span>30s</span>
+              <span>45s</span>
+              <span>60s</span>
+              <span>75s</span>
+              <span>90s (End)</span>
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="table-wrap" id="gambleTableWrap" style="display:none;">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Username &amp; Mod Status</th>
+          <th>Total !gamble Count</th>
+          <th>!points &rarr; !gamble Auto-Check</th>
+          <th>Interval Between !gambles (Min)</th>
+          <th>
+            <div>Inter-Gamble Interval Candlestick (0m &rarr; 45m Cooldown Window)</div>
+            <div class="axis-labels">
+              <span>0m</span>
+              <span>7.5m</span>
+              <span>15m</span>
+              <span>22.5m</span>
+              <span>30m</span>
+              <span>37.5m</span>
+              <span>45m</span>
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="gambleTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const EMBEDDED_DATA = null;
+
+let DATA = null;
+let sessions = [];
+let users = [];
+let userMeta = {};
+let gambleUsers = [];
+let watchlist = {};
+let numSessions = 0;
+let currentTabMode = 'rolling';
+
+// UI Elements
+const timeSlider = document.getElementById('timeSlider');
+const windowSelect = document.getElementById('windowSelect');
+const metricSelect = document.getElementById('metricSelect');
+const watchlistFilterSelect = document.getElementById('watchlistFilterSelect');
+const pctMinSelect = document.getElementById('pctMinSelect');
+const minEntriesInput = document.getElementById('minEntriesInput');
+const sortSelect = document.getElementById('sortSelect');
+const searchInput = document.getElementById('searchInput');
+const windowBadge = document.getElementById('windowBadge');
+const summarySubtitle = document.getElementById('summarySubtitle');
+const lastUpdatedLabel = document.getElementById('lastUpdatedLabel');
+const latestStreamSummaryLabel = document.getElementById('latestStreamSummaryLabel');
+const matchCountLabel = document.getElementById('matchCountLabel');
+const tableBody = document.getElementById('tableBody');
+const gambleTableBody = document.getElementById('gambleTableBody');
+const raffleTableWrap = document.getElementById('raffleTableWrap');
+const gambleTableWrap = document.getElementById('gambleTableWrap');
+const timelineCanvas = document.getElementById('timelineCanvas');
+const inspectorPanel = document.getElementById('inspectorPanel');
+const inspectorTitle = document.getElementById('inspectorTitle');
+const inspectorWatchlistMeta = document.getElementById('inspectorWatchlistMeta');
+const userHistoryCanvas = document.getElementById('userHistoryCanvas');
+const watchlistPillsRow = document.getElementById('watchlistPillsRow');
+const auditKpiRow = document.getElementById('auditKpiRow');
+
+let selectedUserIdx = null;
+let playInterval = null;
+
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function decryptEnvelope(envelope, secretKey) {
+  const enc = new TextEncoder();
+  const keyMaterial = await window.crypto.subtle.importKey(
+    'raw',
+    enc.encode(secretKey),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+  const aesKey = await window.crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: b64ToBytes(envelope.salt),
+      iterations: envelope.iter || 250000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+  const decryptedBuf = await window.crypto.subtle.decrypt(
+    {
+      name: 'AES-GCM',
+      iv: b64ToBytes(envelope.iv),
+    },
+    aesKey,
+    b64ToBytes(envelope.ct)
+  );
+  const jsonText = new TextDecoder().decode(decryptedBuf);
+  return JSON.parse(jsonText);
+}
+
+async function loadAndDecryptData() {
+  const res = await fetch(`./raffle_data.enc.json?t=${Date.now()}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching raffle_data.enc.json`);
+  const envelope = await res.json();
+
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const queryParams = new URLSearchParams(window.location.search);
+  const urlKey = hashParams.get('key') || queryParams.get('key');
+  const savedKey = localStorage.getItem('hyndrosa_aes_key');
+
+  for (const candidate of [urlKey, savedKey]) {
+    if (!candidate) continue;
+    try {
+      const parsed = await decryptEnvelope(envelope, candidate);
+      localStorage.setItem('hyndrosa_aes_key', candidate);
+      return parsed;
+    } catch {
+      // Invalid key; fall through to prompt
+    }
+  }
+
+  return new Promise((resolve) => {
+    const gate = document.getElementById('authGate');
+    const form = document.getElementById('gateForm');
+    const input = document.getElementById('gateInput');
+    const err = document.getElementById('gateError');
+    gate.style.display = 'flex';
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const entered = input.value.trim();
+      if (!entered) return;
+      err.style.display = 'none';
+      try {
+        const parsed = await decryptEnvelope(envelope, entered);
+        localStorage.setItem('hyndrosa_aes_key', entered);
+        gate.style.display = 'none';
+        resolve(parsed);
+      } catch {
+        err.textContent = 'Decryption failed: Invalid AES key.';
+        err.style.display = 'block';
+      }
+    });
+  });
+}
+
+function getWatchlistBadgeHtml(uname) {
+  const entry = watchlist[uname];
+  if (!entry || entry.status === 'CLEARED') return '';
+  const st = entry.status;
+  const note = [entry.reason, entry.updated_by ? 'by ' + entry.updated_by : '', entry.updated_at ? '(' + entry.updated_at.slice(0, 10) + ')' : ''].filter(Boolean).join(' ');
+  if (st === 'MONITORING' || st === 'ACTIVE_MONITORING') {
+    return `<span class="badge badge-monitoring" title="Twitch Suspicious User Monitoring: ${note}">👁 MONITORING</span>`;
+  }
+  if (st === 'RESTRICTED') {
+    return `<span class="badge badge-restricted" title="Twitch Restricted User: ${note}">🚫 RESTRICTED</span>`;
+  }
+  if (st === 'BANNED') {
+    return `<span class="badge badge-banned" title="Banned: ${note}">🔨 BANNED</span>`;
+  }
+  if (st === 'WATCHLIST') {
+    return `<span class="badge badge-watchlist" title="Admin Watchlist: ${note}">📌 WATCHLIST</span>`;
+  }
+  return '';
+}
+
+function renderWatchlistPills() {
+  const entries = Object.entries(watchlist).filter(([, info]) => info && info.status !== 'CLEARED');
+  const statusOrder = { RESTRICTED: 1, MONITORING: 2, ACTIVE_MONITORING: 2, WATCHLIST: 3, BANNED: 4 };
+  entries.sort((a, b) => (statusOrder[a[1].status] || 9) - (statusOrder[b[1].status] || 9) || a[0].localeCompare(b[0]));
+
+  const pillsHtml = entries.map(([uname, info]) => {
+    const cls = (info.status === 'BANNED') ? 'pill-banned' : ((info.status === 'MONITORING' || info.status === 'ACTIVE_MONITORING') ? 'pill-monitoring' : '');
+    const icon = (info.status === 'BANNED') ? '🔨 ' : ((info.status === 'MONITORING' || info.status === 'ACTIVE_MONITORING') ? '👁 ' : '📌 ');
+    const shortReason = info.reason ? ` (${info.reason})` : '';
+    return `<span class="pill ${cls}" data-user="${uname}" title="${info.status}: ${info.reason || ''}">${icon}${uname}${shortReason}</span>`;
+  }).join('');
+
+  watchlistPillsRow.innerHTML = `<span style="color:var(--muted); font-size:11px;">Twitch Monitored &amp; Admin Watchlist:</span>` + pillsHtml;
+
+  watchlistPillsRow.querySelectorAll('.pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const uname = pill.dataset.user;
+      const uid = users.indexOf(uname);
+      if (uid !== -1) {
+        selectedUserIdx = uid;
+        updateDashboard();
+        inspectorPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  });
+}
+
+function getWindowSessionRange() {
+  const endIdx = parseInt(timeSlider.value, 10);
+  const lookbackDays = parseInt(windowSelect.value, 10);
+  if (lookbackDays === 1) {
+    return [endIdx, endIdx];
+  }
+  const endTs = sessions[endIdx].end_ts;
+  const cutoffTs = endTs - (lookbackDays * 86400);
+  let startIdx = endIdx;
+  while (startIdx > 0 && sessions[startIdx - 1].ts >= cutoffTs) {
+    startIdx--;
+  }
+  return [startIdx, endIdx];
+}
+
+function computeStats(deltasInt) {
+  const n = deltasInt.length;
+  if (n === 0) return null;
+  const sorted = deltasInt.slice().sort((a, b) => a - b);
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += sorted[i];
+  const mean = (sum / n) / 10;
+
+  let sqDiff = 0;
+  for (let i = 0; i < n; i++) {
+    const d = (sorted[i] / 10) - mean;
+    sqDiff += d * d;
+  }
+  const sd = n > 1 ? Math.sqrt(sqDiff / (n - 1)) : 0;
+
+  const pick = (p) => sorted[Math.min(n - 1, Math.max(0, Math.floor(p * (n - 1))))] / 10;
+  const min = sorted[0] / 10;
+  const p5 = pick(0.05);
+  const q1 = pick(0.25);
+  const med = pick(0.50);
+  const q3 = pick(0.75);
+  const p95 = pick(0.95);
+  const max = sorted[n - 1] / 10;
+
+  return { n, min, p5, q1, med, q3, p95, max, mean, sd, iqr: q3 - q1, span90: p95 - p5 };
+}
+
+function drawTimeline(startIdx, endIdx) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = timelineCanvas.getBoundingClientRect();
+  timelineCanvas.width = rect.width * dpr;
+  timelineCanvas.height = rect.height * dpr;
+  const ctx = timelineCanvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width;
+  const h = rect.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const xStart = (startIdx / (numSessions - 1)) * w;
+  const xEnd = (endIdx / (numSessions - 1)) * w;
+  ctx.fillStyle = 'rgba(88, 166, 255, 0.16)';
+  ctx.fillRect(xStart, 0, Math.max(3, xEnd - xStart), h);
+
+  let maxRc = 1;
+  for (let i = 0; i < numSessions; i++) {
+    if (sessions[i].rc > maxRc) maxRc = sessions[i].rc;
+  }
+
+  const barW = Math.max(1.5, (w / numSessions) - 0.5);
+  for (let i = 0; i < numSessions; i++) {
+    const x = (i / (numSessions - 1)) * (w - barW);
+    const bh = (sessions[i].rc / maxRc) * (h - 8);
+    const inWin = i >= startIdx && i <= endIdx;
+    ctx.fillStyle = inWin ? '#58a6ff' : '#30363d';
+    ctx.fillRect(x, h - bh, barW, bh);
+  }
+
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(xEnd, 0);
+  ctx.lineTo(xEnd, h);
+  ctx.stroke();
+}
+
+function drawUserHistory(uIdx, winStartIdx, winEndIdx) {
+  if (uIdx === null || uIdx === undefined) {
+    inspectorPanel.style.display = 'none';
+    return;
+  }
+  inspectorPanel.style.display = 'block';
+  const username = users[uIdx];
+  const wl = watchlist[username];
+  const meta = userMeta[username] || { totalMsgs: 0, cmdMsgs: 0, gambleMsgs: 0, wins: 0, ptsWon: 0 };
+  const humanMsgs = Math.max(0, meta.totalMsgs - meta.cmdMsgs);
+  const cmdPct = meta.totalMsgs > 0 ? ((meta.cmdMsgs / meta.totalMsgs) * 100).toFixed(1) : '0.0';
+
+  inspectorTitle.innerHTML = `Historical Rolling Profile: ${username} ${getWatchlistBadgeHtml(username)} (Across All ${numSessions} Streams, 2022–2026)`;
+  const wlStr = (wl && wl.status !== 'CLEARED')
+    ? `Mod Status: ${wl.status} (${wl.reason || 'N/A'})`
+    : 'Mod Status: Unflagged';
+  inspectorWatchlistMeta.textContent = `${wlStr} • All-Time Chat: ${cmdPct}% commands (${meta.cmdMsgs.toLocaleString()} cmds vs ${humanMsgs.toLocaleString()} human msgs) • !gambles: ${meta.gambleMsgs.toLocaleString()} • Raffle Wins: ${meta.wins.toLocaleString()} (${meta.ptsWon.toLocaleString()} pts)`;
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = userHistoryCanvas.getBoundingClientRect();
+  userHistoryCanvas.width = rect.width * dpr;
+  userHistoryCanvas.height = rect.height * dpr;
+  const ctx = userHistoryCanvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width;
+  const h = rect.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const topH = 65;
+  const botTop = 80;
+  const botH = h - botTop - 18;
+
+  const xWinStart = (winStartIdx / (numSessions - 1)) * w;
+  const xWinEnd = (winEndIdx / (numSessions - 1)) * w;
+  ctx.fillStyle = 'rgba(88, 166, 255, 0.10)';
+  ctx.fillRect(xWinStart, 0, Math.max(2, xWinEnd - xWinStart), h);
+
+  ctx.strokeStyle = '#30363d';
+  ctx.beginPath();
+  ctx.moveTo(0, 72);
+  ctx.lineTo(w, 72);
+  ctx.stroke();
+
+  const y9s = botTop + (9.0 / 90.0) * botH;
+  const y31s = botTop + (31.5 / 90.0) * botH;
+  ctx.fillStyle = 'rgba(248, 81, 73, 0.09)';
+  ctx.fillRect(0, y9s, w, y31s - y9s);
+
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '10px sans-serif';
+  ctx.fillText('100% Entry', 6, 12);
+  ctx.fillText('0%', 6, topH);
+  ctx.fillText('0s (Start)', 6, botTop + 10);
+  ctx.fillText('30s', 6, botTop + (30/90)*botH);
+  ctx.fillText('60s', 6, botTop + (60/90)*botH);
+  ctx.fillText('90s (End)', 6, botTop + botH - 2);
+
+  for (let i = 0; i < numSessions; i++) {
+    const sess = sessions[i];
+    const uRec = sess.u.find(item => item[0] === uIdx);
+    if (!uRec) continue;
+
+    const x = (i / (numSessions - 1)) * w;
+    const entered = uRec[1];
+    const pct = Math.min(1, entered / sess.rc);
+    const barH = pct * (topH - 6);
+
+    ctx.fillStyle = (i >= winStartIdx && i <= winEndIdx) ? '#3fb950' : 'rgba(63, 185, 80, 0.45)';
+    ctx.fillRect(x - 1.5, topH - barH, 3, barH);
+
+    const st = computeStats(uRec[3]);
+    if (!st) continue;
+    const yP5 = botTop + Math.min(1, st.p5 / 90) * botH;
+    const yP95 = botTop + Math.min(1, st.p95 / 90) * botH;
+    const yQ1 = botTop + Math.min(1, st.q1 / 90) * botH;
+    const yQ3 = botTop + Math.min(1, st.q3 / 90) * botH;
+    const yMed = botTop + Math.min(1, st.med / 90) * botH;
+
+    ctx.strokeStyle = 'rgba(201, 209, 217, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, yP5);
+    ctx.lineTo(x, yP95);
+    ctx.stroke();
+
+    const isTight = st.iqr <= 11 && st.p95 <= 35;
+    ctx.fillStyle = isTight ? '#f85149' : (st.iqr <= 16 ? '#d29922' : '#58a6ff');
+    ctx.fillRect(x - 2, yQ1, 4, Math.max(2, yQ3 - yQ1));
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x - 2, yMed - 1, 4, 2);
+  }
+
+  ctx.strokeStyle = '#58a6ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(xWinEnd, 0);
+  ctx.lineTo(xWinEnd, h);
+  ctx.stroke();
+}
+
+function updateAuditKpis(endIdx) {
+  const sess = sessions[endIdx];
+  if (!sess) return;
+  document.getElementById('kpiStreamDate').textContent = sess.date;
+  document.getElementById('kpiStreamRaffles').textContent = `${sess.rc} valid multi-ticket raffles`;
+  document.getElementById('kpiParticipants').textContent = sess.u.length.toLocaleString();
+
+  let highRate = 0;
+  let monitoredCount = 0;
+  let unflaggedSuspects = 0;
+
+  for (const [uid, entered, , deltas] of sess.u) {
+    const uname = users[uid];
+    const pct = (entered / sess.rc) * 100;
+    if (pct >= 60) highRate++;
+    const wl = watchlist[uname];
+    const isFlagged = wl && wl.status !== 'CLEARED';
+    if (isFlagged) monitoredCount++;
+    const st = computeStats(deltas);
+    if (!isFlagged && entered >= 5 && pct >= 50 && st && st.iqr <= 12.0 && st.p95 <= 38.0) {
+      unflaggedSuspects++;
+    }
+  }
+
+  document.getElementById('kpiHighRateCount').textContent = `${highRate} users entered ≥60% of stream raffles`;
+  document.getElementById('kpiMonitoredActive').textContent = monitoredCount;
+  document.getElementById('kpiUnflaggedSuspects').textContent = unflaggedSuspects;
+}
+
+function renderGambleTable(searchVal, wlFilter) {
+  const filtered = gambleUsers.filter(g => {
+    if (searchVal && !g.uname.includes(searchVal)) return false;
+    const wl = watchlist[g.uname];
+    const isFlagged = Boolean(wl && wl.status !== 'CLEARED');
+    const isTwitchMonitored = Boolean(wl && (wl.status === 'MONITORING' || wl.status === 'ACTIVE_MONITORING' || wl.status === 'RESTRICTED'));
+    if (wlFilter === 'monitored_all' && !isFlagged) return false;
+    if (wlFilter === 'twitch_monitoring' && !isTwitchMonitored) return false;
+    if (wlFilter === 'unflagged_suspects' && (isFlagged || !(g.st.iqr <= 8.0 || g.autoPtsPct >= 50))) return false;
+    return true;
+  });
+
+  matchCountLabel.textContent = `Showing ${filtered.length} !gamble user${filtered.length === 1 ? '' : 's'} (min 15 !gambles)`;
+
+  const maxMin = 45;
+  const toPct = (m) => Math.min(100, Math.max(0, (m / maxMin) * 100)).toFixed(2);
+
+  const htmlRows = filtered.map((g, idx) => {
+    const st = g.st;
+    const isScriptLike = (st.iqr <= 7.5 && g.intervalsCount >= 10) || g.autoPtsPct >= 60;
+    const isNarrow = !isScriptLike && st.iqr <= 12.5 && g.intervalsCount >= 10;
+
+    const boxColor = isScriptLike
+      ? 'rgba(248, 81, 73, 0.78)'
+      : (isNarrow ? 'rgba(210, 153, 34, 0.78)' : 'rgba(88, 166, 255, 0.65)');
+    const boxBorder = isScriptLike ? '#f85149' : (isNarrow ? '#d29922' : '#58a6ff');
+
+    const botBadge = isScriptLike
+      ? `<span class="badge badge-bot" title="Tight interval IQR (${st.iqr.toFixed(1)}m) or high !points->!gamble script rate">GAMBLE BOT?</span>`
+      : '';
+    const modBadge = getWatchlistBadgeHtml(g.uname);
+
+    const p5Left = toPct(st.p5);
+    const p95Left = toPct(st.p95);
+    const whiskerWidth = Math.max(0.5, p95Left - p5Left).toFixed(2);
+    const q1Left = toPct(st.q1);
+    const q3Left = toPct(st.q3);
+    const boxWidth = Math.max(0.8, q3Left - q1Left).toFixed(2);
+    const medLeft = toPct(st.med);
+    const meanLeft = toPct(st.mean);
+
+    const autoColor = g.autoPtsPct >= 50 ? '#f85149' : (g.autoPtsPct >= 20 ? '#e3b341' : '#8b949e');
+    const uid = users.indexOf(g.uname);
+
+    return `<tr class="user-row" data-uid="${uid}">
+      <td class="rank-cell">${idx + 1}</td>
+      <td class="user-cell">${g.uname}${modBadge}${botBadge}</td>
+      <td class="pct-cell">
+        <strong>${g.totalGambles.toLocaleString()} !gambles</strong>
+        <div class="pct-sub">${g.intervalsCount} same-stream intervals</div>
+      </td>
+      <td class="activity-cell">
+        <strong style="color:${autoColor}">${g.autoPtsPct.toFixed(1)}% preceded by !points</strong>
+        <span class="stats-sub">${g.autoPtsCount} / ${g.totalGambles} within 12s of !points</span>
+      </td>
+      <td class="stats-cell">
+        <strong>Med: ${st.med.toFixed(1)}m (IQR: ${st.iqr.toFixed(1)}m)</strong>
+        <span class="stats-sub">Q1–Q3: ${st.q1.toFixed(1)}m–${st.q3.toFixed(1)}m &bull; Mean: ${st.mean.toFixed(1)}m</span>
+      </td>
+      <td class="candle-cell">
+        <div class="candle-track">
+          <div class="candle-grid-line" style="left:16.67%"></div>
+          <div class="candle-grid-line" style="left:33.33%"></div>
+          <div class="candle-grid-line" style="left:50.00%"></div>
+          <div class="candle-grid-line" style="left:66.67%"></div>
+          <div class="candle-grid-line" style="left:83.33%"></div>
+          <div class="whisker-line" style="left:${p5Left}%; width:${whiskerWidth}%;"></div>
+          <div class="whisker-cap" style="left:${p5Left}%;"></div>
+          <div class="whisker-cap" style="left:${p95Left}%;"></div>
+          <div class="candle-box" style="left:${q1Left}%; width:${boxWidth}%; background:${boxColor}; border:1px solid ${boxBorder};"></div>
+          <div class="median-line" style="left:${medLeft}%;"></div>
+          <div class="mean-dot" style="left:${meanLeft}%;"></div>
+        </div>
+      </td>
+    </tr>`;
+  });
+
+  gambleTableBody.innerHTML = htmlRows.join('');
+}
+
+function updateDashboard() {
+  if (!DATA) return;
+  const [startIdx, endIdx] = getWindowSessionRange();
+  const metric = metricSelect.value;
+  const wlFilter = watchlistFilterSelect.value;
+  const pctMin = parseFloat(pctMinSelect.value);
+  const minEntries = parseInt(minEntriesInput.value, 10) || 1;
+  const sortBy = sortSelect.value;
+  const searchVal = searchInput.value.trim().toLowerCase();
+
+  updateAuditKpis(endIdx);
+  drawTimeline(startIdx, endIdx);
+  drawUserHistory(selectedUserIdx, startIdx, endIdx);
+
+  if (currentTabMode === 'gamble') {
+    raffleTableWrap.style.display = 'none';
+    gambleTableWrap.style.display = 'block';
+    renderGambleTable(searchVal, wlFilter);
+    return;
+  }
+
+  raffleTableWrap.style.display = 'block';
+  gambleTableWrap.style.display = 'none';
+
+  let windowTotalRaffles = 0;
+  const uEntered = new Map();
+  const uStreamRaffles = new Map();
+  const uActiveRaffles = new Map();
+  const uStreamsCount = new Map();
+  const uDeltas = new Map();
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const sess = sessions[i];
+    windowTotalRaffles += sess.rc;
+    const uList = sess.u;
+    for (let j = 0; j < uList.length; j++) {
+      const [uid, entered, activeSpan, deltas] = uList[j];
+      uEntered.set(uid, (uEntered.get(uid) || 0) + entered);
+      uStreamRaffles.set(uid, (uStreamRaffles.get(uid) || 0) + sess.rc);
+      uActiveRaffles.set(uid, (uActiveRaffles.get(uid) || 0) + activeSpan);
+      uStreamsCount.set(uid, (uStreamsCount.get(uid) || 0) + 1);
+      let arr = uDeltas.get(uid);
+      if (!arr) {
+        arr = [];
+        uDeltas.set(uid, arr);
+      }
+      for (let k = 0; k < deltas.length; k++) arr.push(deltas[k]);
+    }
+  }
+
+  const numWinSessions = endIdx - startIdx + 1;
+  windowBadge.textContent = `${sessions[startIdx].date} → ${sessions[endIdx].date} (${numWinSessions} stream${numWinSessions>1?'s':''}, ${windowTotalRaffles.toLocaleString()} valid raffles)`;
+
+  const rows = [];
+  for (const [uid, entered] of uEntered.entries()) {
+    if (entered < minEntries) continue;
+    const uname = users[uid];
+    if (searchVal && !uname.includes(searchVal)) continue;
+
+    let denom = uStreamRaffles.get(uid);
+    if (metric === 'active') denom = uActiveRaffles.get(uid);
+    else if (metric === 'global') denom = windowTotalRaffles;
+
+    const pct = denom > 0 ? (entered / denom) * 100 : 0;
+    if (pct < pctMin) continue;
+
+    const st = computeStats(uDeltas.get(uid));
+    const wl = watchlist[uname];
+    const meta = userMeta[uname] || { totalMsgs: 0, cmdMsgs: 0, gambleMsgs: 0, wins: 0, ptsWon: 0 };
+    const cmdPct = meta.totalMsgs > 0 ? (meta.cmdMsgs / meta.totalMsgs) * 100 : 0;
+    const humanMsgs = Math.max(0, meta.totalMsgs - meta.cmdMsgs);
+
+    const isFlagged = Boolean(wl && wl.status !== 'CLEARED');
+    const isTwitchMonitored = Boolean(wl && (wl.status === 'MONITORING' || wl.status === 'ACTIVE_MONITORING' || wl.status === 'RESTRICTED'));
+    const isBotLike = st.iqr <= 11.0 && st.p95 <= 35.0 && entered >= Math.min(10, minEntries);
+    const isGhost = cmdPct >= 92.0 && meta.totalMsgs >= 30;
+
+    if (wlFilter === 'monitored_all' && !isFlagged) continue;
+    if (wlFilter === 'twitch_monitoring' && !isTwitchMonitored) continue;
+    if (wlFilter === 'unflagged_suspects' && (isFlagged || !(st.iqr <= 14.0 && st.p95 <= 38.0))) continue;
+    if (wlFilter === 'ghost_only' && !(cmdPct >= 90.0)) continue;
+
+    rows.push({
+      uid,
+      uname,
+      entered,
+      denom,
+      pct,
+      streams: uStreamsCount.get(uid),
+      st,
+      wl,
+      meta,
+      cmdPct,
+      humanMsgs,
+      isBotLike,
+      isGhost
+    });
+  }
+
+  rows.sort((a, b) => {
+    if (sortBy === 'pct_desc') return b.pct - a.pct || b.entered - a.entered;
+    if (sortBy === 'iqr_asc') return a.st.iqr - b.st.iqr || b.pct - a.pct;
+    if (sortBy === 'med_asc') return a.st.med - b.st.med || b.pct - a.pct;
+    if (sortBy === 'cmd_pct_desc') return b.cmdPct - a.cmdPct || b.entered - a.entered;
+    if (sortBy === 'pts_won_desc') return b.meta.ptsWon - a.meta.ptsWon || b.entered - a.entered;
+    if (sortBy === 'entries_desc') return b.entered - a.entered || b.pct - a.pct;
+    return b.pct - a.pct;
+  });
+
+  matchCountLabel.textContent = `Showing ${rows.length} user${rows.length === 1 ? '' : 's'} (${pctMin}%–100%, min ${minEntries} entries)`;
+
+  const maxSec = 90;
+  const toPct = (sec) => Math.min(100, Math.max(0, (sec / maxSec) * 100)).toFixed(2);
+
+  const htmlRows = rows.map((r, idx) => {
+    const st = r.st;
+    const isBotLike = r.isBotLike;
+    const isNarrow = !isBotLike && st.iqr <= 16.0 && r.entered >= Math.min(10, minEntries);
+
+    const boxColor = isBotLike
+      ? 'rgba(248, 81, 73, 0.78)'
+      : (isNarrow ? 'rgba(210, 153, 34, 0.78)' : 'rgba(88, 166, 255, 0.65)');
+    const boxBorder = isBotLike ? '#f85149' : (isNarrow ? '#d29922' : '#58a6ff');
+
+    const timerBadgeHtml = isBotLike
+      ? `<span class="badge badge-bot" title="95% of joins within ${st.p5.toFixed(1)}s–${st.p95.toFixed(1)}s (IQR ${st.iqr.toFixed(1)}s)">TIGHT TIMER</span>`
+      : (isNarrow ? `<span class="badge badge-tight" title="Narrow IQR (${st.iqr.toFixed(1)}s)">NARROW</span>` : '');
+
+    const ghostBadgeHtml = r.isGhost
+      ? `<span class="badge badge-ghost" title="${r.cmdPct.toFixed(1)}% of all messages are !commands (${r.humanMsgs} human messages total)">👻 SILENT</span>`
+      : '';
+
+    const modBadgeHtml = getWatchlistBadgeHtml(r.uname);
+    const modNoteHtml = (r.wl && r.wl.reason && r.wl.status !== 'CLEARED')
+      ? `<span class="mod-note-sub">${r.wl.reason}</span>`
+      : '';
+
+    const p5Left = toPct(st.p5);
+    const p95Left = toPct(st.p95);
+    const whiskerWidth = Math.max(0.5, p95Left - p5Left).toFixed(2);
+
+    const minLeft = toPct(st.min);
+    const maxLeft = toPct(st.max);
+    const minmaxWidth = Math.max(0.5, maxLeft - minLeft).toFixed(2);
+
+    const q1Left = toPct(st.q1);
+    const q3Left = toPct(st.q3);
+    const boxWidth = Math.max(0.8, q3Left - q1Left).toFixed(2);
+
+    const medLeft = toPct(st.med);
+    const meanLeft = toPct(st.mean);
+
+    const pctColor = r.pct >= 80 ? '#f85149' : (r.pct >= 70 ? '#e3b341' : '#3fb950');
+    const cmdColor = r.cmdPct >= 92 ? '#ff7b72' : (r.cmdPct >= 80 ? '#e3b341' : '#8b949e');
+    const selectedClass = r.uid === selectedUserIdx ? 'selected' : '';
+
+    return `<tr class="user-row ${selectedClass}" data-uid="${r.uid}">
+      <td class="rank-cell">${idx + 1}</td>
+      <td class="user-cell">${r.uname}${modBadgeHtml}${timerBadgeHtml}${ghostBadgeHtml}${modNoteHtml}</td>
+      <td class="pct-cell">
+        <div class="pct-bar-wrap">
+          <span class="pct-val" style="color:${pctColor}">${r.pct.toFixed(1)}%</span>
+          <div>
+            <div>${r.entered.toLocaleString()} / ${r.denom.toLocaleString()}</div>
+            <div class="pct-sub">${r.streams} stream${r.streams>1?'s':''}</div>
+          </div>
+        </div>
+      </td>
+      <td class="activity-cell">
+        <strong style="color:${cmdColor}">${r.cmdPct.toFixed(1)}% Cmds</strong> <span class="pct-sub">(${r.humanMsgs.toLocaleString()} chat)</span>
+        <span class="stats-sub">Won: ${r.meta.wins.toLocaleString()} (${(r.meta.ptsWon/1000).toFixed(1)}k pts) &bull; !gamble: ${r.meta.gambleMsgs}</span>
+      </td>
+      <td class="stats-cell">
+        <strong>${st.mean.toFixed(1)}s &plusmn; ${st.sd.toFixed(1)}s</strong>
+        <span class="stats-sub">Med: ${st.med.toFixed(1)}s &bull; Q1–Q3: ${st.q1.toFixed(1)}–${st.q3.toFixed(1)}s (p95: ${st.p95.toFixed(1)}s)</span>
+      </td>
+      <td class="candle-cell">
+        <div class="candle-track">
+          <div class="candle-grid-line" style="left:16.67%"></div>
+          <div class="candle-grid-line" style="left:33.33%"></div>
+          <div class="candle-grid-line" style="left:50.00%"></div>
+          <div class="candle-grid-line" style="left:66.67%"></div>
+          <div class="candle-grid-line" style="left:83.33%"></div>
+          <div class="bot-zone" style="left:10.0%; width:25.0%;"></div>
+          <div class="minmax-line" style="left:${minLeft}%; width:${minmaxWidth}%;"></div>
+          <div class="whisker-line" style="left:${p5Left}%; width:${whiskerWidth}%;"></div>
+          <div class="whisker-cap" style="left:${p5Left}%;"></div>
+          <div class="whisker-cap" style="left:${p95Left}%;"></div>
+          <div class="candle-box" style="left:${q1Left}%; width:${boxWidth}%; background:${boxColor}; border:1px solid ${boxBorder};"></div>
+          <div class="median-line" style="left:${medLeft}%;"></div>
+          <div class="mean-dot" style="left:${meanLeft}%;"></div>
+        </div>
+      </td>
+    </tr>`;
+  });
+
+  tableBody.innerHTML = htmlRows.join('');
+}
+
+function setTabMode(mode) {
+  currentTabMode = mode;
+  document.getElementById('tabBtnRolling').classList.toggle('active', mode === 'rolling');
+  document.getElementById('tabBtnLatest').classList.toggle('active', mode === 'latest');
+  document.getElementById('tabBtnGamble').classList.toggle('active', mode === 'gamble');
+
+  if (mode === 'latest') {
+    auditKpiRow.style.display = 'grid';
+    timeSlider.value = numSessions - 1;
+    windowSelect.value = '1';
+    minEntriesInput.value = '4';
+    pctMinSelect.value = '40';
+    sortSelect.value = 'iqr_asc';
+  } else if (mode === 'rolling') {
+    auditKpiRow.style.display = 'none';
+    windowSelect.value = '90';
+    minEntriesInput.value = '10';
+    pctMinSelect.value = '60';
+    sortSelect.value = 'pct_desc';
+  } else if (mode === 'gamble') {
+    auditKpiRow.style.display = 'none';
+  }
+  updateDashboard();
+}
+
+async function initApp() {
+  if (EMBEDDED_DATA) {
+    DATA = EMBEDDED_DATA;
+  } else {
+    try {
+      DATA = await loadAndDecryptData();
+    } catch (err) {
+      summarySubtitle.textContent = 'Error loading encrypted dataset: ' + err.message;
+      return;
+    }
+  }
+
+  sessions = DATA.sessions || [];
+  users = DATA.users || [];
+  userMeta = DATA.user_meta || {};
+  gambleUsers = DATA.gamble_users || [];
+  watchlist = DATA.watchlist || {};
+  numSessions = sessions.length;
+
+  timeSlider.max = numSessions - 1;
+  timeSlider.value = numSessions - 1;
+
+  const genDate = new Date(DATA.generated_at);
+  const latestSess = sessions[numSessions - 1];
+  lastUpdatedLabel.textContent = `Last Updated: ${isNaN(genDate) ? DATA.generated_at : genDate.toLocaleString()}`;
+  latestStreamSummaryLabel.textContent = latestSess
+    ? `Latest Stream: ${latestSess.date} (${latestSess.rc} raffles, ${latestSess.u.length} participants)`
+    : '';
+
+  summarySubtitle.textContent = `Dataset: ${DATA.total_raffles.toLocaleString()} valid raffles across ${numSessions} streams (${sessions[0]?.date} to ${latestSess?.date}) • ${users.length.toLocaleString()} tracked users`;
+
+  renderWatchlistPills();
+  updateDashboard();
+}
+
+// Event Listeners
+timeSlider.addEventListener('input', updateDashboard);
+windowSelect.addEventListener('change', updateDashboard);
+metricSelect.addEventListener('change', updateDashboard);
+watchlistFilterSelect.addEventListener('change', updateDashboard);
+pctMinSelect.addEventListener('change', updateDashboard);
+minEntriesInput.addEventListener('input', updateDashboard);
+sortSelect.addEventListener('change', updateDashboard);
+searchInput.addEventListener('input', updateDashboard);
+
+document.getElementById('tabBtnRolling').addEventListener('click', () => setTabMode('rolling'));
+document.getElementById('tabBtnLatest').addEventListener('click', () => setTabMode('latest'));
+document.getElementById('tabBtnGamble').addEventListener('click', () => setTabMode('gamble'));
+
+document.getElementById('btnFirst').addEventListener('click', () => { timeSlider.value = 0; updateDashboard(); });
+document.getElementById('btnLast').addEventListener('click', () => { timeSlider.value = numSessions - 1; updateDashboard(); });
+document.getElementById('btnBack1').addEventListener('click', () => { timeSlider.value = Math.max(0, parseInt(timeSlider.value,10) - 1); updateDashboard(); });
+document.getElementById('btnBack10').addEventListener('click', () => { timeSlider.value = Math.max(0, parseInt(timeSlider.value,10) - 10); updateDashboard(); });
+document.getElementById('btnFwd1').addEventListener('click', () => { timeSlider.value = Math.min(numSessions - 1, parseInt(timeSlider.value,10) + 1); updateDashboard(); });
+document.getElementById('btnFwd10').addEventListener('click', () => { timeSlider.value = Math.min(numSessions - 1, parseInt(timeSlider.value,10) + 10); updateDashboard(); });
+
+const btnPlay = document.getElementById('btnPlay');
+btnPlay.addEventListener('click', () => {
+  if (playInterval) {
+    clearInterval(playInterval);
+    playInterval = null;
+    btnPlay.textContent = '▶ Play';
+    btnPlay.classList.remove('active');
+  } else {
+    if (parseInt(timeSlider.value, 10) >= numSessions - 1) {
+      timeSlider.value = 0;
+    }
+    btnPlay.textContent = '⏸ Pause';
+    btnPlay.classList.add('active');
+    playInterval = setInterval(() => {
+      const next = parseInt(timeSlider.value, 10) + 1;
+      if (next >= numSessions) {
+        clearInterval(playInterval);
+        playInterval = null;
+        btnPlay.textContent = '▶ Play';
+        btnPlay.classList.remove('active');
+      } else {
+        timeSlider.value = next;
+        updateDashboard();
+      }
+    }, 120);
+  }
+});
+
+timelineCanvas.addEventListener('mousedown', (e) => {
+  const scrub = (ev) => {
+    const rect = timelineCanvas.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
+    timeSlider.value = Math.round(ratio * (numSessions - 1));
+    updateDashboard();
+  };
+  scrub(e);
+  const onMove = (ev) => scrub(ev);
+  const onUp = () => {
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+  };
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+});
+
+const onRowClick = (e) => {
+  const tr = e.target.closest('tr.user-row');
+  if (!tr) return;
+  const uid = parseInt(tr.dataset.uid, 10);
+  if (!isNaN(uid) && uid >= 0) {
+    selectedUserIdx = uid;
+    updateDashboard();
+    inspectorPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+};
+tableBody.addEventListener('click', onRowClick);
+gambleTableBody.addEventListener('click', onRowClick);
+
+document.getElementById('btnCloseInspector').addEventListener('click', () => {
+  selectedUserIdx = null;
+  updateDashboard();
+});
+
+window.addEventListener('resize', updateDashboard);
+initApp();
+</script>
+</body>
+</html>
