@@ -754,6 +754,7 @@
             <option value="monitored_all">👁 All Flagged / Monitored / Watchlist</option>
             <option value="twitch_monitoring">👁 Twitch "Suspicious: Monitoring" Only</option>
             <option value="unflagged_suspects">⚠️ Unflagged Tight-Timer Suspects</option>
+            <option value="wrong_cmd">🪤 Typed Wrong Raffle Keyword (Bot Trap)</option>
             <option value="ghost_only">👻 Silent Cmd-Only Users (&ge;90% Cmds)</option>
           </select>
         </div>
@@ -1436,7 +1437,10 @@ function drawUserHistory(uIdx, winStartIdx, winEndIdx) {
   const wlStr = (wl && wl.status !== 'CLEARED')
     ? `Mod Status: ${wl.status} (${wl.reason || 'N/A'})`
     : 'Mod Status: Unflagged';
-  inspectorWatchlistMeta.textContent = `${wlStr} • All-Time Chat: ${cmdPct}% commands (${meta.cmdMsgs.toLocaleString()} cmds vs ${humanMsgs.toLocaleString()} human msgs) • !gambles: ${meta.gambleMsgs.toLocaleString()} • Raffle Wins: ${meta.wins.toLocaleString()} (${meta.ptsWon.toLocaleString()} pts)`;
+  const trapStr = meta.wrongCmds > 0
+    ? ` • 🪤 Keyword Trap (wrong raffle cmd): ${meta.wrongCmds}x (${(meta.wrongCmdDetails || []).join(', ')})`
+    : '';
+  inspectorWatchlistMeta.textContent = `${wlStr}${trapStr} • All-Time Chat: ${cmdPct}% commands (${meta.cmdMsgs.toLocaleString()} cmds vs ${humanMsgs.toLocaleString()} human msgs) • !gambles: ${meta.gambleMsgs.toLocaleString()} • Raffle Wins: ${meta.wins.toLocaleString()} (${meta.ptsWon.toLocaleString()} pts)`;
 
   inspectorFooterGuide.textContent = inspectorMode === 'gamble'
     ? 'Top band: !gambles per stream (Purple = normal, Red = ≥50% preceded by !points) | Bottom band: Inter-Gamble Interval Candlestick (0m–45m cooldown)'
@@ -1929,6 +1933,7 @@ function updateDashboard() {
     if (wlFilter === 'monitored_all' && !isFlagged) continue;
     if (wlFilter === 'twitch_monitoring' && !isTwitchMonitored) continue;
     if (wlFilter === 'unflagged_suspects' && (isFlagged || !(st.iqr <= 14.0 && st.p95 <= 38.0))) continue;
+    if (wlFilter === 'wrong_cmd' && !(meta.wrongCmds > 0)) continue;
     if (wlFilter === 'ghost_only' && !(cmdPct >= 90.0)) continue;
 
     rows.push({
@@ -1981,6 +1986,10 @@ function updateDashboard() {
       ? `<span class="badge badge-ghost" title="${r.cmdPct.toFixed(1)}% of all messages are !commands (${r.humanMsgs} human messages total)">👻 SILENT</span>`
       : '';
 
+    const trapBadgeHtml = (r.meta.wrongCmds > 0)
+      ? `<span class="badge badge-bot" title="Typed wrong raffle keyword when command was changed: ${(r.meta.wrongCmdDetails || []).join(', ')}">🪤 WRONG CMD (${r.meta.wrongCmds}x)</span>`
+      : '';
+
     const modBadgeHtml = getWatchlistBadgeHtml(r.uname);
     const modNoteHtml = (r.wl && r.wl.reason && r.wl.status !== 'CLEARED')
       ? `<span class="mod-note-sub">${r.wl.reason}</span>`
@@ -2007,7 +2016,7 @@ function updateDashboard() {
 
     return `<tr class="user-row ${selectedClass}" data-uid="${r.uid}">
       <td class="rank-cell">${idx + 1}</td>
-      <td class="user-cell">${r.uname}${modBadgeHtml}${timerBadgeHtml}${ghostBadgeHtml}${modNoteHtml}</td>
+      <td class="user-cell">${r.uname}${modBadgeHtml}${trapBadgeHtml}${timerBadgeHtml}${ghostBadgeHtml}${modNoteHtml}</td>
       <td class="pct-cell">
         <div class="pct-bar-wrap">
           <span class="pct-val" style="color:${pctColor}">${r.pct.toFixed(1)}%</span>
